@@ -1,26 +1,31 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
-use OpenCloud\Common\PersistentObject;
 use OpenCloud\CloudMonitoring\Exception;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * Agent class.
- * 
- * @extends ReadOnlyResource
- * @implements ResourceInterface
  */
-class AgentTarget extends ReadOnlyResource implements ResourceInterface
+class AgentTarget extends ReadOnlyResource
 {
     
-    public $type = 'agent.filesystem';
+    private $type = 'agent.filesystem';
     
     protected static $json_name = 'targets';
     protected static $json_collection_name = 'targets';
     protected static $url_resource = 'targets';
 
-    private $allowedTypes = array(
+    protected $allowedTypes = array(
         'agent.filesystem',
         'agent.memory',
         'agent.load_average',
@@ -30,10 +35,10 @@ class AgentTarget extends ReadOnlyResource implements ResourceInterface
         'agent.plugin'
     );
 
-    public function baseUrl()
+    public function getUrl($path = null, array $query = array())
     {
-        $resourceUrl = "agent/check_types/{$this->type}/{$this->ResourceName()}";
-        return $this->Parent()->Url($this->Parent()->id . '/' . $resourceUrl);
+        $path = "agent/check_types/{$this->type}/{$this->resourceName()}";
+        return $this->getParent()->getUrl($path);
     }
 
     public function setType($type)
@@ -47,22 +52,10 @@ class AgentTarget extends ReadOnlyResource implements ResourceInterface
 
         $this->type = $type;
     }
-
-    public function listAll()
+    
+    public function getType()
     {
-        if (!$this->type) {
-            throw new Exception\AgentException(sprintf(
-                'Please specify a target type'
-            ));
-        }
-
-        $response = json_decode($this->Service()->Request($this->Url())->HttpBody());
-        
-        if (isset($response->{self::$json_collection_name})) {
-            $response = $response->{self::$json_collection_name};
-        }
-
-        return $response;
-    } 
+        return $this->type;
+    }
     
 }

@@ -1,19 +1,25 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
 /**
  * View class.
- * 
- * @extends ReadOnlyResource
  */
-class View extends ReadOnlyResource implements ResourceInterface
+class View extends ReadOnlyResource
 {
-    public $timestamp;
-    public $entity;
-    public $alarms;
-    public $checks;
-    public $latest_alarm_states;
+    private $timestamp;
+    private $entity;
+    private $alarms;
+    private $checks;
+    private $latest_alarm_states;
     
     protected static $json_name = false;
     protected static $json_collection_name = 'values';
@@ -27,10 +33,15 @@ class View extends ReadOnlyResource implements ResourceInterface
         'alarms' => 'Alarm',
         'checks' => 'Check'
     );
-    
-    public function baseUrl()
+
+    public function getAlarm($info = null)
     {
-        return $this->getService()->url($this->resourceName());
+        return $this->getService()->resource('Alarm', $info);
+    }
+
+    public function getCheck($info = null)
+    {
+        return $this->getService()->resource('Check', $info);
     }
 
 }

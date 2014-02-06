@@ -2,52 +2,27 @@
 /**
  * PHP OpenCloud library.
  * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
  * @author    Glen Campbell <glen.campbell@rackspace.com>
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\DNS;
 
-use OpenCloud\Common\Service as AbstractService;
-use OpenCloud\Common\Lang;
-use OpenCloud\Common\Exceptions;
+use OpenCloud\Common\Service\AbstractService;
 use OpenCloud\OpenStack;
-use OpenCloud\Compute\Server;
+use OpenCloud\Compute\Resource\Server;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * DNS Service.
  */
 class Service extends AbstractService
 {
-
-    /**
-     * creates a new DNS object
-     *
-     * @param \OpenCloud\OpenStack $conn connection object
-     * @param string $serviceName the name of the service
-     * @param string $serviceRegion (not currently used; DNS is regionless)
-     * @param string $urltype the type of URL
-     */
-    public function __construct(
-        OpenStack $connection,
-        $serviceName,
-        $serviceRegion,
-        $urltype
-    ) {
-        
-        $this->getLogger()->info('Initializing DNS...');
-        
-        parent::__construct(
-            $connection,
-            'rax:dns',
-            $serviceName,
-            $serviceRegion,
-            $urltype
-        );
-    }
+    const DEFAULT_TYPE = 'rax:dns';
+    const DEFAULT_NAME = 'cloudDNS';
+    const DEFAULT_REGION = false;
 
     /**
      * returns a DNS::Domain object
@@ -58,7 +33,7 @@ class Service extends AbstractService
      */
     public function domain($info = null)
     {
-        return new Domain($this, $info);
+        return new Resource\Domain($this, $info);
     }
 
     /**
@@ -70,8 +45,8 @@ class Service extends AbstractService
      */
     public function domainList($filter = array())
     {
-        $url = $this->url(Domain::ResourceName(), $filter);
-        return $this->collection('OpenCloud\DNS\Domain', $url);
+        $url = $this->url(Resource\Domain::ResourceName(), $filter);
+        return $this->collection('OpenCloud\DNS\Resource\Domain', $url);
     }
 
     /**
@@ -82,7 +57,7 @@ class Service extends AbstractService
      */
     public function ptrRecord($info = null)
     {
-        return new PtrRecord($this, $info);
+        return new Resource\PtrRecord($this, $info);
     }
 
     /**
@@ -97,29 +72,7 @@ class Service extends AbstractService
         $url = $this->url('rdns/' . $server->getService()->name(), array(
             'href' => $server->url()
         ));
-        return $this->collection('\OpenCloud\DNS\PtrRecord', $url);
-    }
-
-    /**
-     * performs a HTTP request
-     *
-     * This method overrides the request with JSON content type
-     *
-     * @param string $url the URL to target
-     * @param string $method the HTTP method to use
-     * @param array $headers key/value pairs for headers to include
-     * @param string $body the body of the request (for PUT and POST)
-     * @return \OpenCloud\HttpResponse
-     */
-    public function request(
-    	$url,
-    	$method = 'GET',
-    	array $headers = array(),
-    	$body = null
-    ) {
-        $headers['Accept'] = RAXSDK_CONTENT_TYPE_JSON;
-        $headers['Content-Type'] = RAXSDK_CONTENT_TYPE_JSON;
-        return parent::request($url, $method, $headers, $body);
+        return $this->collection('OpenCloud\DNS\Resource\PtrRecord', $url);
     }
 
     /**
@@ -138,28 +91,8 @@ class Service extends AbstractService
      */
     public function asyncRequest($url, $method = 'GET', $headers = array(), $body = null)
     {
-        // perform the initial request
-        $resp = $this->request($url, $method, $headers, $body);
-
-        // @codeCoverageIgnoreStart
-        if ($resp->HttpStatus() > 204) {
-            throw new Exceptions\AsyncHttpError(sprintf(
-                Lang::translate('Unexpected HTTP status for async request: URL [%s] method [%s] status [%s] response [%s]'),
-                $url,
-                $method,
-                $resp->HttpStatus(),
-                $resp->HttpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        // debug
-        $this->getLogger()->info('AsyncResponse [{body}]', array(
-            'body' => $resp->httpBody()
-        ));
-
-        // return an AsyncResponse object
-        return new AsyncResponse($this, $resp->httpBody());
+        $response = $this->getClient()->createRequest($method, $url, $headers, $body)->send();
+        return new Resource\AsyncResponse($this, Formatter::decode($response));
     }
 
     /**
@@ -200,13 +133,15 @@ class Service extends AbstractService
 
     /**
      * returns a list of limits
-     *
      */
     public function limits($type = null)
     {
         $url = $this->url('limits') . ($type ? "/$type" : '');
-        $object = $this->simpleRequest($url);
-        return ($type) ? $object : $object->limits;
+
+        $response = $this->getClient()->get($url)->send();
+        $body = Formatter::decode($response);
+
+        return ($body) ? $body : $body->limits;
     }
 
     /**
@@ -216,41 +151,9 @@ class Service extends AbstractService
      */
     public function limitTypes()
     {
-        $object = $this->simpleRequest($this->url('limits/types'));
-        return $object->limitTypes;
-    }
-
-    /**
-     * Performs a simple request and returns the JSON as an object
-     *
-     * @param string $url the URL to GET
-     */
-    public function simpleRequest($url)
-    {
-        // Perform the request
-        $response = $this->request($url);
-
-        // Check for errors
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() > 202) {
-            throw new Exceptions\HttpError(sprintf(
-                Lang::translate('Unexpected status [%s] for URL [%s], body [%s]'),
-                $response->HttpStatus(),
-                $url,
-                $response->HttpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        // Decode the JSON
-        $json = $response->httpBody();
-        $this->getLogger()->info('Limit Types JSON [{json}]', array('json' => $json));
-
-        $object = json_decode($json);
-
-        $this->checkJsonError();
-
-        return $object;
+        $response = $this->getClient()->get($this->getUrl('limits/types'))->send();
+        $body = Formatter::decode($response);
+        return $body->limitTypes;
     }
 
 }

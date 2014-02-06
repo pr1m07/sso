@@ -45,7 +45,7 @@ class Keystone
 		$this->CI->curl->http_header('Content-type: application/json');
 		$this->CI->curl->option(CURLOPT_POSTFIELDS,$user);
 		$response = json_decode($this->CI->curl->execute());
-
+		
 		if($this->check_error($response))
 			return false;
 		
@@ -130,7 +130,9 @@ class Keystone
 		
 		$csrfmiddlewaretoken = $matches[1][0][0];
 		$id_region = $matches[1][1][0];
-
+		
+		// openstack views.py set attribute => setattr(request, '_dont_enforce_csrf_checks', True)
+		
 		$form = '<html>
 		<head>
 		<script type="text/javascript">
@@ -140,7 +142,7 @@ class Keystone
     	</script>
 		</head><body onload="loadit()">
 		 <form id="myform" style="display:none" autocomplete="on" class="" action="'.$url.'/" method="POST"  >
-		 	<input type="hidden" name="csrfmiddlewaretoken" value="'.$csrfmiddlewaretoken.'" />
+		 	<!--input type="hidden" name="csrfmiddlewaretoken" value="'.$csrfmiddlewaretoken.'" /-->
 		 	<input id="id_region" name="region" type="hidden" value="'.$id_region.'" />
 		 	<input id="id_username" name="username" type="text" value="'.$user.'" />
     		<input id="id_password" name="password" type="password" value="'.$pass.'" />
@@ -148,7 +150,7 @@ class Keystone
     	</form>
 		</body></html>
 		';
-
+		
 		return $form;
 
 	}

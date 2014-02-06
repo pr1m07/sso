@@ -1,17 +1,22 @@
 <?php
 /**
- * An abstraction that defines persistent objects associated with a service
- *
- * @copyright 2012-2013 Rackspace Hosting, Inc.
- * See COPYING for licensing information
- *
- * @package phpOpenCloud
- * @version 1.0
- * @author Glen Campbell <glen.campbell@rackspace.com>
- * @author Jamie Hannaford <jamie.hannaford@rackspace.com>
+ * PHP OpenCloud library
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\Common;
+
+use Guzzle\Http\Exception\BadResponseException;
+use Guzzle\Http\Message\Response;
+use Guzzle\Http\Url;
+use OpenCloud\Common\Constants\State as StateConst;
+use OpenCloud\Common\Service\AbstractService;
+use OpenCloud\Common\Exceptions\RuntimeException;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * Represents an object that can be retrieved, created, updated and deleted.
@@ -69,10 +74,8 @@ abstract class PersistentObject extends Base
 {
       
     private $service;
-    
     private $parent;
-    
-    protected $id; 
+    protected $metadata;
 
     /**
      * Retrieves the instance from persistent storage
@@ -82,40 +85,21 @@ abstract class PersistentObject extends Base
      */
     public function __construct($service = null, $info = null)
     {
-        if ($service instanceof Service) {
+        if ($service instanceof AbstractService) {
             $this->setService($service);
         }
         
-        if (property_exists($this, 'metadata')) {
-            $this->metadata = new Metadata;
-        }
-        
+        $this->metadata = new Metadata;
+
         $this->populate($info);
     }
-    
-    /**
-     * Validates properties that have a namespace: prefix
-     *
-     * If the property prefix: appears in the list of supported extension
-     * namespaces, then the property is applied to the object. Otherwise,
-     * an exception is thrown.
-     *
-     * @param string $name the name of the property
-     * @param mixed $value the property's value
-     * @return void
-     * @throws AttributeError
-     */
-    public function __set($name, $value)
-    {
-        $this->setProperty($name, $value, $this->getService()->namespaces());
-    }
-    
+            
     /**
      * Sets the service associated with this resource object.
      * 
-     * @param \OpenCloud\Common\Service $service
+     * @param OpenCloud\Common\Service\AbstractService $service
      */
-    public function setService(Service $service)
+    public function setService(AbstractService $service)
     {
         $this->service = $service;
         return $this;
@@ -125,26 +109,16 @@ abstract class PersistentObject extends Base
      * Returns the service object for this resource; required for making
      * requests, etc. because it has direct access to the Connection.
      * 
-     * @return \OpenCloud\Common\Service
+     * @return OpenCloud\Common\Service\AbstractService
      */
     public function getService()
     {
         if (null === $this->service) {
-            throw new Exceptions\ServiceValueError(
+            throw new Exceptions\ServiceException(
                 'No service defined'
             );
         }
         return $this->service;
-    }
-    
-    /**
-     * Legacy shortcut to getService
-     * 
-     * @return \OpenCloud\Common\Service
-     */
-    public function service()
-    {
-        return $this->getService();
     }
     
     /**
@@ -170,28 +144,27 @@ abstract class PersistentObject extends Base
         }
         return $this->parent;
     }
-    
-    /**
-     * Legacy shortcut to getParent
-     * 
-     * @return \OpenCloud\Common\PersistentObject
-     */
-    public function parent()
+        
+    public function getClient()
     {
-        return $this->getParent();
+        return $this->getService()->getClient();
     }
     
+    public function setMetadata($metadata)
+    {
+        $this->metadata = $metadata;
+        
+        return $this;
+    }
     
+    public function getMetadata()
+    {
+        return $this->metadata;
+    }
 
-    
-    /**
-     * API OPERATIONS (CRUD & CUSTOM)
-     */
-    
     /**
      * Creates a new object
      *
-     * @api
      * @param array $params array of values to set when creating the object
      * @return HttpResponse
      * @throws VolumeCreateError if HTTP status is not Success
@@ -203,59 +176,35 @@ abstract class PersistentObject extends Base
             $this->populate($params, false);
         }
 
-        // debug
-        $this->getLogger()->info('{class}::Create({name})', array(
-            'class' => get_class($this), 
-            'name'  => $this->Name()
-        ));
-
         // construct the JSON
-        $object = $this->createJson();
-        $json = json_encode($object);
+        $json = json_encode($this->createJson());
         $this->checkJsonError();
 
-        $this->getLogger()->info('{class}::Create JSON [{json}]', array(
-            'class' => get_class($this), 
-            'json'  => $json
-        ));
- 
-        // send the request
-        $response = $this->getService()->request(
-            $this->createUrl(),
-            'POST',
-            array('Content-Type' => 'application/json'),
-            $json
-        );
-        
-        // check the return code
-        // @codeCoverageIgnoreStart
-        if ($response->httpStatus() > 204) {
-            throw new Exceptions\CreateError(sprintf(
-                Lang::translate('Error creating [%s] [%s], status [%d] response [%s]'),
-                get_class($this),
-                $this->Name(),
-                $response->HttpStatus(),
-                $response->HttpBody()
-            ));
-        }
+        $createUrl = $this->createUrl();
 
-        if ($response->HttpStatus() == "201" && ($location = $response->Header('Location'))) {
-            // follow Location header
-            $this->refresh(null, $location);
-        } else {
-            // set values from response
-            $object = json_decode($response->httpBody());
-            
-            if (!$this->checkJsonError()) {
-                $top = $this->jsonName();
-                if (isset($object->$top)) {
-                    $this->populate($object->$top);
-                }
-            }
+        $response = $this->getClient()->post($createUrl, array(), $json)->send();
+
+        // We have to try to parse the response body first because it should have precedence over a Location refresh.
+        // I'd like to reverse the order, but Nova instances return ephemeral properties on creation which are not
+        // available when you follow the Location link...
+        if (null !== ($decoded = $this->parseResponse($response))) {
+            $this->populate($decoded);
+        } elseif ($location = $response->getHeader('Location')) {
+            $this->refreshFromLocationUrl($location);
         }
-        // @codeCoverageIgnoreEnd
 
         return $response;
+    }
+
+    public function refreshFromLocationUrl($url)
+    {
+        $fullUrl = Url::factory($url);
+
+        $response = $this->getClient()->get($fullUrl)->send();
+
+        if (null !== ($decoded = $this->parseResponse($response))) {
+            $this->populate($decoded);
+        }
     }
 
     /**
@@ -276,44 +225,60 @@ abstract class PersistentObject extends Base
         // debug
         $this->getLogger()->info('{class}::Update({name})', array(
             'class' => get_class($this),
-            'name'  => $this->Name()   
+            'name'  => $this->getProperty($this->primaryKeyField())
         ));
 
         // construct the JSON
-        $obj = $this->updateJson($params);
-        $json = json_encode($obj);
-
+        $json = json_encode($this->updateJson($params));
         $this->checkJsonError();
 
-        $this->getLogger()->info('{class}::Update JSON [{json}]', array(
-            'class' => get_class($this), 
-            'json'  => $json
-        ));
-
         // send the request
-        $response = $this->getService()->Request(
-            $this->url(),
-            'PUT',
-            array(),
-            $json
-        );
-
-        // check the return code
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() > 204) {
-            throw new Exceptions\UpdateError(sprintf(
-                Lang::translate('Error updating [%s] with [%s], status [%d] response [%s]'),
-                get_class($this),
-                $json,
-                $response->HttpStatus(),
-                $response->HttpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        return $response;
+        return $this->getClient()->put($this->getUrl(), array(), $json)->send();
     }
 
+    /**
+     * Refreshes the object from the origin (useful when the server is
+     * changing states)
+     *
+     * @return void
+     * @throws IdRequiredError
+     */
+    public function refresh($id = null, $url = null)
+    {
+        $primaryKey = $this->primaryKeyField();
+        $primaryKeyVal = $this->getProperty($primaryKey);
+        
+        if (!$url) {
+            
+            if (!$id = $id ?: $primaryKeyVal) {
+                throw new Exceptions\IdRequiredError(sprintf(
+                    Lang::translate("%s has no %s; cannot be refreshed"),
+                    get_class($this),
+                    $primaryKey
+                ));
+            }
+            
+            if ($primaryKeyVal != $id) {
+                $this->setProperty($primaryKey, $id);
+            }
+            
+            $url = $this->getUrl();
+        }
+        
+        // reset status, if available
+        if ($this->getProperty('status')) {
+            $this->setProperty('status', null);
+        }
+
+        $response = $this->getClient()->get($url)->send();
+  
+        if (null !== ($decoded = $this->parseResponse($response))) {
+            $this->populate($decoded);
+        }
+        
+        return $response;
+    }
+    
     /**
      * Deletes an object
      *
@@ -326,22 +291,133 @@ abstract class PersistentObject extends Base
         $this->getLogger()->info('{class}::Delete()', array('class' => get_class($this)));
 
         // send the request
-        $response = $this->getService()->request($this->url(), 'DELETE');
+        return $this->getClient()->delete($this->getUrl())->send();
+    }
+    
+    /**
+     * Returns the default URL of the object
+     *
+     * This may have to be overridden in subclasses.
+     *
+     * @param string $subresource optional sub-resource string
+     * @param array $qstr optional k/v pairs for query strings
+     * @return string
+     */
+    public function url($path = null, array $query = array())
+    {
+        return $this->getUrl($path, $query);
+    }
+    
+    public function getUrl($path = null, array $query = array())
+    {
+        if (!$url = $this->findLink('self')) {
+            
+            // ...otherwise construct a URL from parent and this resource's
+            // "URL name". If no name is set, resourceName() throws an error.
+            $url = $this->getParent()->getUrl($this->resourceName());
+            
+            // Does it have a primary key?
+            if (null !== ($primaryKey = $this->getProperty($this->primaryKeyField()))) {
+                $url->addPath($primaryKey);
+            }
+        }
 
-        // check the return code
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() > 204) {
-            throw new Exceptions\DeleteError(sprintf(
-                Lang::translate('Error deleting [%s] [%s], status [%d] response [%s]'),
-                get_class(),
-                $this->Name(),
-                $response->HttpStatus(),
-                $response->HttpBody()
+        if (!$url instanceof Url) {
+            $url = Url::factory($url);
+        }
+        
+        return $url->addPath($path)->setQuery($query);
+    }
+
+    /**
+     * Waits for the server/instance status to change
+     *
+     * This function repeatedly polls the system for a change in server
+     * status. Once the status reaches the `$terminal` value (or 'ERROR'),
+     * then the function returns.
+     *
+     * @api
+     * @param string $terminal the terminal state to wait for
+     * @param integer $timeout the max time (in seconds) to wait
+     * @param callable $callback a callback function that is invoked with
+     *      each repetition of the polling sequence. This can be used, for
+     *      example, to update a status display or to permit other operations
+     *      to continue
+     * @return void
+     * @codeCoverageIgnore
+     */
+    public function waitFor($state = null, $timeout = null, $callback = null, $interval = null)
+    {
+        $state    = $state ?: StateConst::ACTIVE;
+        $timeout  = $timeout ?: StateConst::DEFAULT_TIMEOUT;
+        $interval = $interval ?: StateConst::DEFAULT_INTERVAL;
+
+        // save stats
+        $startTime = time();
+        
+        $states = array('ERROR', $state);
+        
+        while (true) {
+            
+            $this->refresh($this->getProperty($this->primaryKeyField()));
+            
+            if ($callback) {
+                call_user_func($callback, $this);
+            }
+            
+            if (in_array($this->status(), $states) || (time() - $startTime) > $timeout) {
+                return;
+            }
+            
+            sleep($interval);
+        }
+    }
+    
+    /**
+     * Sends the json string to the /action resource
+     *
+     * This is used for many purposes, such as rebooting the server,
+     * setting the root password, creating images, etc.
+     * Since it can only be used on a live server, it checks for a valid ID.
+     *
+     * @param $object - this will be encoded as json, and we handle all the JSON
+     *     error-checking in one place
+     * @throws ServerIdError if server ID is not defined
+     * @throws ServerActionError on other errors
+     * @returns boolean; TRUE if successful, FALSE otherwise
+     */
+    protected function action($object)
+    {
+        if (!$this->getProperty($this->primaryKeyField())) {
+            throw new Exceptions\IdRequiredError(sprintf(
+                Lang::translate('%s is not defined'),
+                get_class($this),
+                $this->primaryKeyField()
             ));
         }
-        // @codeCoverageIgnoreEnd
 
-        return $response;
+        if (!is_object($object)) {
+            throw new Exceptions\ServerActionError(sprintf(
+                Lang::translate('%s::Action() requires an object as its parameter'),
+                get_class($this)
+            ));
+        }
+
+        // convert the object to json
+        $json = json_encode($object);
+        $this->checkJsonError();
+
+        // debug - save the request
+        $this->getLogger()->info(Lang::translate('{class}::action [{json}]'), array(
+            'class' => get_class($this), 
+            'json'  => $json
+        ));
+
+        // get the URL for the POST message
+        $url = $this->url('action');
+
+        // POST the message
+        return $this->getClient()->post($url, array(), $json)->send();
     }
 
      /**
@@ -352,10 +428,26 @@ abstract class PersistentObject extends Base
      */
     protected function createJson()
     {
-        throw new Exceptions\CreateError(sprintf(
-            Lang::translate('[%s] CreateJson() must be overridden'),
-            get_class($this)
-        ));
+        if (!isset($this->createKeys)) {
+            throw new RuntimeException(sprintf(
+                'This resource object [%s] must have a visible createKeys array',
+                get_class($this)
+            ));
+        }
+        
+        $element = (object) array();
+
+        foreach ($this->createKeys as $key) {
+            if (null !== ($property = $this->getProperty($key))) {
+                $element->$key = $property;
+            }
+        }
+
+        if (!empty($this->metadata)) {
+            $element->metadata = (object) $this->metadata->toArray();
+        }
+
+        return (object) array($this->jsonName() => (object) $element);
     }
 
     /**
@@ -381,7 +473,7 @@ abstract class PersistentObject extends Base
     {
         throw new Exceptions\CreateError(sprintf(
             Lang::translate('[%s] does not support Create()'),
-            get_class()
+            get_class($this)
         ));
     }
 
@@ -394,7 +486,7 @@ abstract class PersistentObject extends Base
     {
         throw new Exceptions\DeleteError(sprintf(
             Lang::translate('[%s] does not support Delete()'),
-            get_class()
+            get_class($this)
         ));
     }
 
@@ -407,208 +499,10 @@ abstract class PersistentObject extends Base
     {
         throw new Exceptions\UpdateError(sprintf(
             Lang::translate('[%s] does not support Update()'),
-            get_class()
-        ));
-    }
-    
-    /**
-     * Returns the default URL of the object
-     *
-     * This may have to be overridden in subclasses.
-     *
-     * @param string $subresource optional sub-resource string
-     * @param array $qstr optional k/v pairs for query strings
-     * @return string
-     * @throws UrlError if URL is not defined
-     */
-    public function url($subresource = null, $queryString = array())
-    {
-        // find the primary key attribute name
-        $primaryKey = $this->primaryKeyField();
-
-        // first, see if we have a [self] link
-        $url = $this->findLink('self');
-
-        /**
-         * Next, check to see if we have an ID
-         * Note that we use Parent() instead of Service(), since the parent
-         * object might not be a service.
-         */
-        if (!$url && $this->$primaryKey) {
-            $url = Lang::noslash($this->getParent()->url($this->resourceName())) . '/' . $this->$primaryKey;
-        }
-
-        // add the subresource
-        if ($url) {
-            $url .= $subresource ? "/$subresource" : '';
-            if (count($queryString)) {
-                $url .= '?' . $this->makeQueryString($queryString);
-            }
-            return $url;
-        }
-
-        // otherwise, we don't have a URL yet
-        throw new Exceptions\UrlError(sprintf(
-            Lang::translate('%s does not have a URL yet'), 
             get_class($this)
         ));
     }
-
-    /**
-     * Waits for the server/instance status to change
-     *
-     * This function repeatedly polls the system for a change in server
-     * status. Once the status reaches the `$terminal` value (or 'ERROR'),
-     * then the function returns.
-     *
-     * The polling interval is set by the constant RAXSDK_POLL_INTERVAL.
-     *
-     * The function will automatically terminate after RAXSDK_SERVER_MAXTIMEOUT
-     * seconds elapse.
-     *
-     * @api
-     * @param string $terminal the terminal state to wait for
-     * @param integer $timeout the max time (in seconds) to wait
-     * @param callable $callback a callback function that is invoked with
-     *      each repetition of the polling sequence. This can be used, for
-     *      example, to update a status display or to permit other operations
-     *      to continue
-     * @return void
-     */
-    public function waitFor(
-        $terminal = 'ACTIVE',
-        $timeout = RAXSDK_SERVER_MAXTIMEOUT,
-        $callback = NULL,
-        $sleep = RAXSDK_POLL_INTERVAL
-    ) {
-        // find the primary key field
-        $primaryKey = $this->PrimaryKeyField();
-
-        // save stats
-        $startTime = time();
         
-        $states = array('ERROR', $terminal);
-        
-        while (true) {
-            
-            $this->refresh($this->$primaryKey);
-            
-            if ($callback) {
-                call_user_func($callback, $this);
-            }
-            
-            if (in_array($this->status(), $states) || (time() - $startTime) > $timeout) {
-                return;
-            }
-            // @codeCoverageIgnoreStart
-            sleep($sleep);
-        }
-    }
-    // @codeCoverageIgnoreEnd
-
-    /**
-     * Refreshes the object from the origin (useful when the server is
-     * changing states)
-     *
-     * @return void
-     * @throws IdRequiredError
-     */
-    public function refresh($id = null, $url = null)
-    {
-        $primaryKey = $this->PrimaryKeyField();
-
-        if (!$url) {
-            if ($id === null) {
-                $id = $this->$primaryKey;
-            }
-
-            if (!$id) {
-                throw new Exceptions\IdRequiredError(sprintf(
-                    Lang::translate('%s has no ID; cannot be refreshed'),
-                    get_class())
-                );
-            }
-
-            // retrieve it
-            $this->getLogger()->info(Lang::translate('{class} id [{id}]'), array(
-                'class' => get_class($this), 
-                'id'    => $id
-            ));
-            
-            $this->$primaryKey = $id;
-            $url = $this->url();
-        }
-        
-        // reset status, if available
-        if (property_exists($this, 'status')) {
-            $this->status = null;
-        }
-
-        // perform a GET on the URL
-        $response = $this->getService()->Request($url);
-        
-        // check status codes
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() == 404) {
-            throw new Exceptions\InstanceNotFound(
-                sprintf(Lang::translate('%s [%s] not found [%s]'),
-                get_class($this),
-                $this->$primaryKey,
-                $url
-            ));
-        }
-
-        if ($response->HttpStatus() >= 300) {
-            throw new Exceptions\UnknownError(
-                sprintf(Lang::translate('Unexpected %s error [%d] [%s]'),
-                get_class($this),
-                $response->HttpStatus(),
-                $response->HttpBody()
-            ));
-        }
-
-        // check for empty response
-        if (!$response->HttpBody()) {
-            throw new Exceptions\EmptyResponseError(
-                sprintf(Lang::translate('%s::Refresh() unexpected empty response, URL [%s]'),
-                get_class($this),
-                $url
-            ));
-        }
-
-        // we're ok, reload the response
-        if ($json = $response->HttpBody()) {
- 
-            $this->getLogger()->info('refresh() JSON [{json}]', array('json' => $json));
-            
-            $response = json_decode($json);
-
-            if ($this->CheckJsonError()) {
-                throw new Exceptions\ServerJsonError(sprintf(
-                    Lang::translate('JSON parse error on %s refresh'), 
-                    get_class($this)
-                ));
-            }
-
-            $top = $this->JsonName();
-            
-            if ($top && isset($response->$top)) {
-                $content = $response->$top;
-            } else {
-                $content = $response;
-            }
-            
-            $this->populate($content);
-
-        }
-        // @codeCoverageIgnoreEnd
-    }
-
-    
-    /**
-     * OBJECT INFORMATION
-     */
-    
     /**
      * Returns the displayable name of the object
      *
@@ -621,136 +515,14 @@ abstract class PersistentObject extends Base
      */
     public function name()
     {
-        if (property_exists($this, 'name')) {
-            return $this->name;
+        if (null !== ($name = $this->getProperty('name'))) {
+            return $name;
         } else {
             throw new Exceptions\NameError(sprintf(
                 Lang::translate('Name attribute does not exist for [%s]'),
                 get_class($this)
             ));
         }
-    }
-
-    /**
-     * Sends the json string to the /action resource
-     *
-     * This is used for many purposes, such as rebooting the server,
-     * setting the root password, creating images, etc.
-     * Since it can only be used on a live server, it checks for a valid ID.
-     *
-     * @param $object - this will be encoded as json, and we handle all the JSON
-     *     error-checking in one place
-     * @throws ServerIdError if server ID is not defined
-     * @throws ServerActionError on other errors
-     * @returns boolean; TRUE if successful, FALSE otherwise
-     */
-    protected function action($object)
-    {
-        $primaryKey = $this->primaryKeyField();
-
-        if (!$this->$primaryKey) {
-            throw new Exceptions\IdRequiredError(sprintf(
-                Lang::translate('%s is not defined'),
-                get_class($this)
-            ));
-        }
-
-        if (!is_object($object)) {
-            throw new Exceptions\ServerActionError(sprintf(
-                Lang::translate('%s::Action() requires an object as its parameter'),
-                get_class($this)
-            ));
-        }
-
-        // convert the object to json
-        $json = json_encode($object);
-        $this->getLogger()->info('JSON [{string}]', array('json' => $json));
-
-        $this->checkJsonError();
-
-        // debug - save the request
-        $this->getLogger()->info(Lang::translate('{class}::action [{json}]'), array(
-            'class' => get_class($this), 
-            'json'  => $json
-        ));
-
-        // get the URL for the POST message
-        $url = $this->url('action');
-
-        // POST the message
-        $response = $this->getService()->request($url, 'POST', array(), $json);
-
-        // @codeCoverageIgnoreStart
-        if (!is_object($response)) {
-            throw new Exceptions\HttpError(sprintf(
-                Lang::translate('Invalid response for %s::Action() request'),
-                get_class($this)
-            ));
-        }
-        
-        // check for errors
-        if ($response->HttpStatus() >= 300) {
-            throw new Exceptions\ServerActionError(sprintf(
-                Lang::translate('%s::Action() [%s] failed; response [%s]'),
-                get_class($this),
-                $url,
-                $response->HttpBody()
-            ));
-        }
-        // @codeCoverageIgnoreStart
-
-        return $response;
-    }
-    
-    /**
-     * Execute a custom resource request.
-     * 
-     * @param string $path
-     * @param string $method
-     * @param string|array|object $body
-     * @return boolean
-     * @throws Exceptions\InvalidArgumentError
-     * @throws Exceptions\HttpError
-     * @throws Exceptions\ServerActionError
-     */
-    public function customAction($url, $method = 'GET', $body = null)
-    {
-        if (is_string($body) && (json_decode($body) === null)) {
-            throw new Exceptions\InvalidArgumentError(
-                'Please provide either a well-formed JSON string, or an object '
-                . 'for JSON serialization'
-            );
-        } else {
-            $body = json_encode($body);
-        }
-
-        // POST the message
-        $response = $this->service()->request($url, $method, array(), $body);
-
-        if (!is_object($response)) {
-            throw new Exceptions\HttpError(sprintf(
-                Lang::translate('Invalid response for %s::customAction() request'),
-                get_class($this)
-            ));
-        }
-
-        // check for errors
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() >= 300) {
-            throw new Exceptions\ServerActionError(sprintf(
-                Lang::translate('%s::customAction() [%s] failed; response [%s]'),
-                get_class($this),
-                $url,
-                $response->HttpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        $object = json_decode($response->httpBody());
-        
-        $this->checkJsonError();
-        
-        return $object;
     }
 
     /**
@@ -836,9 +608,9 @@ abstract class PersistentObject extends Base
      *
      * @return string
      */
-    protected function createUrl()
+    public function createUrl()
     {
-        return $this->getParent()->Url($this->ResourceName());
+        return $this->getParent()->getUrl($this->resourceName());
     }
 
     /**
@@ -934,6 +706,21 @@ abstract class PersistentObject extends Base
             Lang::translate('No URL resource defined for class [%s] in ResourceName()'),
             get_class()
         ));
+    }
+    
+    public function parseResponse(Response $response)
+    {
+        $body = Formatter::decode($response);
+        
+        $top = $this->jsonName();
+            
+        if ($top && isset($body->$top)) {
+            $content = $body->$top;
+        } else {
+            $content = $body;
+        }
+        
+        return $content;
     }
 
 }

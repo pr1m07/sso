@@ -57,7 +57,9 @@ $('#users').dataTable({
         <p class="help-block"><br/></p>
         <span class="glyphicon glyphicon-user"></span> Admin user: <span class="text-info"><?=$cloud['admin_user']?></span>
         &nbsp;&nbsp;<span class="glyphicon glyphicon-circle-arrow-right"></span> Admin token: <span class="text-info"><?=$cloud['admin_token']?></span>
-        &nbsp;&nbsp;<span class="glyphicon glyphicon-record"></span> User tenant: <span class="text-info"><?=$cloud['user_tenant']?></span></p>
+        <?php if($cloud['type'] == 'OpenStack') { ?>&nbsp;&nbsp;<span class="glyphicon glyphicon-record"></span> User tenant: <span class="text-info"><?=$cloud['user_tenant']?></span><?php } else { ?> &nbsp;&nbsp;<span class="glyphicon glyphicon-record"></span> Organization: <span class="text-info"><?=$cloud['user_tenant']?></span>
+        <?php } ?>
+        </p>
 		</div>
 	</div>
 
@@ -128,16 +130,42 @@ $('#users').dataTable({
         <div class="modal-body">
           <?php foreach ($cinfo[$u['userID']] as $res) { ?>
           <form action="#" class="well" >
-            <div class="input-group">
-              <span class="input-group-addon"><span class="glyphicon glyphicon-envelope"></span></span>
-              <input type="text" name="email" class="form-control" value="<?=$res->email?>" readonly/>
-            </div>
-
+            
             <p class="help-block"></p>
             <div class="input-group">
               <span class="input-group-addon"><span class="glyphicon glyphicon-user"></span></span>
               <input type="text" name="username" class="form-control" value="<?=$res->name?>" readonly/>
             </div>
+            
+            <?php if($cloud['type'] == 'OpenStack') { ?>
+            <div class="input-group">
+              <span class="input-group-addon"><span class="glyphicon glyphicon-envelope"></span></span>
+              <input type="text" name="email" class="form-control" value="<?=$res->email?>" readonly/>
+            </div>
+			<?php } else { ?>
+			
+			<p class="help-block"></p>
+			<div class="input-group">
+              <span class="input-group-addon"><span class="glyphicon glyphicon-lock"></span></span>
+              <input type="text" name="role" class="form-control" value="<?=$res->role?>" readonly/>
+              <span class="input-group-addon"><em><small>&nbsp; role &nbsp;</small></em></span>
+            </div>
+            
+			<p class="help-block"></p>            
+            <div class="input-group">
+              <span class="input-group-addon"><span class="glyphicon glyphicon-cloud"></span></span>
+              <input type="text" name="StoredVmQuota" class="form-control" value="<?=$res->StoredVmQuota?>" readonly/>
+              <span class="input-group-addon"><em><small>&nbsp; StoredVmQuota &nbsp;</small></em></span>
+            </div>
+            
+            <p class="help-block"></p>
+            <div class="input-group">
+              <span class="input-group-addon"><span class="glyphicon glyphicon-cloud"></span></span>
+              <input type="text" name="DeployedVmQuota" class="form-control" value="<?=$res->DeployedVmQuota?>" readonly/>
+              <span class="input-group-addon"><em><small>&nbsp; DeployedVmQuota &nbsp;</small></em></span>
+            </div>
+			
+			<?php } ?>
 
             <p class="help-block"></p>
             <div class="input-group">

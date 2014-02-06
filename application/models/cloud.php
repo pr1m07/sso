@@ -51,6 +51,11 @@ class Cloud extends CI_Model {
 		$this->db->where('cID',$cID);
 		$this->db->delete('clouds');
 	}
+	
+	function store_token($cID,$data){
+		$this->db->where('cID',$cID);
+		$this->db->update('clouds',$data);
+	}
 
 	function add_user($data){
 		$this->db->insert('permissions',$data);
@@ -86,6 +91,30 @@ class Cloud extends CI_Model {
 			->where('cID',$cID)
 			->join('users','users.userID=permissions.userID','left')
 			->order_by('pID','asec');
+		
+		$query = $this->db->get();
+		return $query->result_array();
+	}
+	
+	function get_user_by_cloud($cID) {
+		$this->db->select('permissions.*,users.*')
+			->from('permissions')
+			->where('cID',$cID)
+			->join('users','users.userID=permissions.userID','left');
+		$query = $this->db->get();
+		return $query->first_row('array');
+	}
+	
+	function add_vm($data){
+		$this->db->insert('virtualm',$data);
+	}
+	
+	function get_vms_by_user($cID) {
+		$this->db->select('virtualm.*,users.*')
+			->from('virtualm')
+			->where('cID',$cID)
+			->join('users','users.userID=virtualm.userID','left')
+			->order_by('vmID','asec');
 		
 		$query = $this->db->get();
 		return $query->result_array();

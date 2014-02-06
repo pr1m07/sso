@@ -35,7 +35,7 @@ class Admin extends CI_Controller {
 		$data['users'] = $this->cloud->get_users_by_cloud($cID);
 
 		$data['cinfo'] = array();
-
+		
 		foreach ($data['users'] as $key => $value) {
 			$data['cinfo'][$value['userID']] = ($this->viewuser($cID,$value['username']));
 		}
@@ -47,6 +47,9 @@ class Admin extends CI_Controller {
 		if($this->session->userdata('logged_in')!=TRUE){
 			redirect(base_url().'users/login');
 		}
+		
+		$type = $this->input->post('type', true);
+
 		if($_POST){
 
 			$data = array(
@@ -55,13 +58,21 @@ class Admin extends CI_Controller {
 				'name' => $this->input->post('name', true),
 				'endpoint' => $this->input->post('endpoint', true),
 				'dashboard' => $this->input->post('dashboard', true),
-				'admin_user' => $this->input->post('admin_user', true),
-				'admin_pass' => $this->input->post('admin_pass', true),
-				'admin_token' => $this->input->post('admin_token', true),
-				'user_tenant' => $this->input->post('user_tenant', true),
+				'admin_user' => ($type == "OpenStack" ? $this->input->post('admin_user_os', true) : $this->input->post('admin_user', true)),
+				'admin_pass' => ($type == "OpenStack" ? $this->input->post('admin_pass_os', true) : $this->input->post('admin_pass', true)),
+				'admin_token' => ($type == "OpenStack" ? $this->input->post('admin_token_os', true) : $this->input->post('admin_token', true)),
+				'user_tenant' => ($type == "OpenStack" ? $this->input->post('user_tenant_os', true) : $this->input->post('user_tenant', true)),
+				'metadata' => $_POST['metadata'],
 				'active' => $this->input->post('active', true)
 			);
+			
 			$cID = $this->cloud->insert_cloud($data);
+			
+			if($this->input->post('type', true) == "VMware"){
+				$cloud = $this->cloud->get_cloud($cID);
+				$this->vmware->auth($cloud['endpoint'],$cloud['admin_user'],$cloud['user_tenant'],$cloud['admin_pass'],'',$cID,true);
+			}
+			
 			redirect(base_url().'admin/index');
 		} else 
 			$this->load->view('admin/new_cloud');
@@ -71,6 +82,9 @@ class Admin extends CI_Controller {
 		if($this->session->userdata('logged_in')!=TRUE){
 			redirect(base_url().'users/login');
 		}	
+		
+		$type = $this->input->post('type', true);
+				
 		// updating cloud settings
 		$data['success'] = 0;
 		if($_POST){
@@ -80,13 +94,21 @@ class Admin extends CI_Controller {
 				'name' => $this->input->post('name', true),
 				'endpoint' => $this->input->post('endpoint', true),
 				'dashboard' => $this->input->post('dashboard', true),
-				'admin_user' => $this->input->post('admin_user', true),
-				'admin_pass' => $this->input->post('admin_pass', true),
-				'admin_token' => $this->input->post('admin_token', true),
-				'user_tenant' => $this->input->post('user_tenant', true),
+				'admin_user' => ($type == "OpenStack" ? $this->input->post('admin_user_os', true) : $this->input->post('admin_user', true)),
+				'admin_pass' => ($type == "OpenStack" ? $this->input->post('admin_pass_os', true) : $this->input->post('admin_pass', true)),
+				'admin_token' => ($type == "OpenStack" ? $this->input->post('admin_token_os', true) : $this->input->post('admin_token', true)),
+				'user_tenant' => ($type == "OpenStack" ? $this->input->post('user_tenant_os', true) : $this->input->post('user_tenant', true)),
+				'metadata' => $_POST['metadata'],
 				'active' => $this->input->post('active', true)
 			);
+			//echo "<pre>"; print_r($data_cloud['metadata']); die(); echo "</pre>";
 			$this->cloud->update_cloud($cID,$data_cloud);
+			
+			if($this->input->post('type', true) == "VMware"){
+				$cloud = $this->cloud->get_cloud($cID);
+				$this->vmware->auth($cloud['endpoint'],$cloud['admin_user'],$cloud['user_tenant'],$cloud['admin_pass'],'',$cID,true);
+			}
+			
 			$data['success'] = 1;			
 		}
 
@@ -107,7 +129,17 @@ class Admin extends CI_Controller {
 		$this->cloud->delete_cloud($cID);
 		redirect(base_url().'admin');
 	}
+/*
+	
+	function auth_cloud($cID){
+		$cloud = $this->cloud->get_cloud($cID);
+			
+		$token = $this->vmware->auth($cloud['endpoint'],$cloud['admin_user'],$cloud['user_tenant'],$cloud['admin_pass']);
+		$data_token = array( 'admin_token' => $token );
+		$this->cloud->store_token($cID,$data_token);
+	}
 
+*/
 	function settings(){	
 		if($this->session->userdata('logged_in')!=TRUE){
 			redirect(base_url().'users/login');
@@ -145,8 +177,75 @@ class Admin extends CI_Controller {
 
 		return $password;
 	}
+	
+	function adduservm($cID,$userID){
+		$local_user = $this->user->get_user($userID);
+		$cloud = $this->cloud->get_cloud($cID);
 
-	function adduser($cID,$userID){
+		$data['success'] = "";
+		$data['errors'] = "";
+
+		$data['cloud'] = $this->cloud->get_cloud($cID);
+		$data['users'] = $this->cloud->get_users_by_cloud($cID);
+
+		$this->vmware->auth($cloud['endpoint'],$cloud['admin_user'],$cloud['user_tenant'],$cloud['admin_pass'],$cloud['admin_token'],$cID,true);
+
+		$organization = $this->vmware->get_group_id($cloud['endpoint'],$cloud['admin_token']);
+
+
+		$cuser = $this->vmware->user_exists($cloud['endpoint'],$cloud['admin_token'],$local_user->username);
+		$luser = $this->cloud->user_exists($cID,$userID);
+
+		if(!$luser){
+			if($cuser) {
+				$data['errors'] = "Username <strong>" . $local_user->username . "</strong> already exist in <strong>" .$cloud['name'] . "</strong> cloud. Please choose different username for this local user.";
+				$this->load->view('admin/cloud',$data);
+			} else {
+				
+				if($local_user->password==NULL){
+					$password = $this->generate_user_password();
+				} else {
+					$password = $this->aes->decrypt($local_user->password);
+				}
+
+				$user = array( 
+					'name' => $local_user->username,
+					'fullname' => 'sso class user',
+					'email' => $local_user->email,
+					'password' => $password,
+					'organization' => $organization,
+					'enabled' => true
+				);
+								
+				$ucID = $this->vmware->create_user($cloud['endpoint'],$cloud['admin_token'],$user);
+
+				
+				$cloud_user = array(
+						'userID' => $userID, 
+						'cID' => $cID,
+						'ucID' => $ucID,
+						'tenant' => $organization,
+						'enabled' => 1
+						);
+
+				$this->cloud->add_user($cloud_user);
+
+
+				$data['cloud'] = $this->cloud->get_cloud($cID);
+				$data['users'] = $this->cloud->get_users_by_cloud($cID);
+				$data['success'] = "User was successfuly added to the cloud";
+				$this->load->view('admin/cloud',$data);
+			}
+		} else {
+			$data['errors'] = "User <strong>" . $local_user->username . "</strong> already exists in <strong>" .$cloud['name'] . "</strong> cloud." ;
+			$this->load->view('admin/cloud',$data);
+		}
+
+
+	}
+
+
+	function adduseros($cID,$userID){
 		$local_user = $this->user->get_user($userID);
 		$cloud = $this->cloud->get_cloud($cID);
 
@@ -211,7 +310,12 @@ class Admin extends CI_Controller {
 
 	function viewuser($cID,$user){
 		$cloud = $this->cloud->get_cloud($cID);
-		$response = $this->keystone->get_user($cloud['endpoint'],$cloud['admin_token'],$user);
+		
+		if($cloud['type'] == "OpenStack"){
+			$response = $this->keystone->get_user($cloud['endpoint'],$cloud['admin_token'],$user);
+		} elseif($cloud['type'] == "VMware") {
+			$response = $this->vmware->get_user($cloud['endpoint'],$cloud['admin_token'],$user);
+		}
 
 		return $response;
 	}
@@ -219,8 +323,11 @@ class Admin extends CI_Controller {
 	function deleteuser($cID,$ucID){
 		$cloud = $this->cloud->get_cloud($cID);
 		$this->cloud->delete_user($ucID);
-
-		$response = $this->keystone->delete_user($cloud['endpoint'],$cloud['admin_token'],$ucID);
+		
+		if($cloud['type'] == 'OpenStack')
+			$response = $this->keystone->delete_user($cloud['endpoint'],$cloud['admin_token'],$ucID);
+		else
+			$response = $this->vmware->delete_user($cloud['endpoint'],$cloud['admin_token'],$ucID);
 
 		redirect(base_url().'admin/cloud/'.$cID);
 	}

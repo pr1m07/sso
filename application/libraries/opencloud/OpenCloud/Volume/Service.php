@@ -1,34 +1,22 @@
 <?php
 /**
- * The OpenStack Cinder (Volume) service
- *
- * @copyright 2012-2013 Rackspace Hosting, Inc.
- * See COPYING for licensing information
- *
- * @package phpOpenCloud
- * @version 1.0
- * @author Glen Campbell <glen.campbell@rackspace.com>
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\Volume;
 
 use OpenCloud\OpenStack;
-use OpenCloud\Common\Nova;
+use OpenCloud\Common\Service\NovaService;
 
-class Service extends Nova 
+class Service extends NovaService
 {
-
-	/**
-	 * creates the VolumeService object
-	 */
-	public function __construct(
-		OpenStack $connection, 
-		$name, 
-		$region, 
-		$urltype
-	) {
-		parent::__construct($connection, 'volume', $name, $region, $urltype);
-	}
+    const DEFAULT_TYPE = 'volume';
+    const DEFAULT_NAME = 'cloudBlockStorage';
 
 	/**
 	 * Returns a Volume object
@@ -37,9 +25,9 @@ class Service extends Nova
 	 * @param string $id the Volume ID
 	 * @return VolumeService\Volume
 	 */
-	public function Volume($id = null) 
+	public function volume($id = null) 
 	{
-		return new Volume($this, $id);
+		return new Resource\Volume($this, $id);
 	}
 
 	/**
@@ -50,10 +38,13 @@ class Service extends Nova
 	 * @param array $filters array of filter key/value pairs
 	 * @return Collection
 	 */
-	public function VolumeList($details = true, $filter = array()) 
+	public function volumeList($details = true, $filter = array()) 
 	{
-		$url = $this->Url(Volume::ResourceName()) . ($details ? '/detail' : '');
-		return $this->Collection('\OpenCloud\Volume\Volume', $url);
+		$url = clone $this->getUrl(Resource\Volume::ResourceName());
+        if ($details) {
+            $url->addPath('detail');
+        }
+		return $this->collection('OpenCloud\Volume\Resource\Volume', $url);
 	}
 
 	/**
@@ -63,9 +54,9 @@ class Service extends Nova
 	 * @param string $id the VolumeType ID
 	 * @return VolumeService\Volume
 	 */
-	public function VolumeType($id = null) 
+	public function volumeType($id = null) 
 	{
-		return new VolumeType($this, $id);
+		return new Resource\VolumeType($this, $id);
 	}
 
 	/**
@@ -75,9 +66,9 @@ class Service extends Nova
 	 * @param array $filters array of filter key/value pairs
 	 * @return Collection
 	 */
-	public function VolumeTypeList($filter = array()) 
+	public function volumeTypeList($filter = array()) 
 	{
-		return $this->Collection('\OpenCloud\Volume\VolumeType');
+		return $this->collection('\OpenCloud\Volume\Resource\VolumeType');
 	}
 
 	/**
@@ -85,9 +76,9 @@ class Service extends Nova
 	 *
 	 * @return Snapshot
 	 */
-	public function Snapshot($id = null) 
+	public function snapshot($id = null) 
 	{
-		return new Snapshot($this, $id);
+		return new Resource\Snapshot($this, $id);
 	}
 
 	/**
@@ -98,9 +89,9 @@ class Service extends Nova
 	 * @param array $filters array of filter key/value pairs
 	 * @return Collection
 	 */
-	public function SnapshotList($filter = array()) 
+	public function snapshotList($filter = array()) 
 	{
-		return $this->Collection('\OpenCloud\Volume\Snapshot');
+		return $this->collection('OpenCloud\Volume\Resource\Snapshot');
 	}
 
 }

@@ -2,56 +2,50 @@
 /**
  * PHP OpenCloud library.
  * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
  * @author    Glen Campbell <glen.campbell@rackspace.com>
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\ObjectStore;
 
-use OpenCloud\Common\Service as CommonService;
 
-define('SWIFT_MAX_OBJECT_SIZE', 5 * 1024 * 1024 * 1024 + 1);
+use OpenCloud\Common\Service\AbstractService as CommonAbstractService;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * An abstract base class for common code shared between ObjectStore\Service
  * (container) and ObjectStore\CDNService (CDN containers).
- * 
- * @todo Maybe we use Traits instead of this small abstract class?
  */
-abstract class AbstractService extends CommonService
+abstract class AbstractService extends CommonAbstractService
 {
-
-    const MAX_CONTAINER_NAME_LEN    = 256;
+    const MAX_CONTAINER_NAME_LENGTH = 256;
     const MAX_OBJECT_NAME_LEN       = 1024;
-    const MAX_OBJECT_SIZE           = SWIFT_MAX_OBJECT_SIZE;
+    const MAX_OBJECT_SIZE           = 5102410241025;
 
     /**
-     * Creates a Container resource object.
-     * 
-     * @param  mixed $cdata  The name of the container or an object from which to set values
-     * @return OpenCloud\ObjectStore\Resource\Container
-     */
-    public function container($cdata = null)
-    {
-        return new Resource\Container($this, $cdata);
-    }
-
-    /**
-     * Returns a Collection of Container objects.
+     * List all available containers. If called by a CDN service, it returns CDN-enabled; if called by a regular
+     * service, normal containers are returned.
      *
-     * @param  array $filter  An array to filter the results
-     * @return OpenCloud\Common\Collection
+     * @param array $filter
+     * @return Collection
      */
-    public function containerList(array $filter = array())
+    public function listContainers(array $filter = array())
     {
         $filter['format'] = 'json';
-        
-        return $this->collection(
-        	'OpenCloud\ObjectStore\Resource\Container', $this->url(null, $filter)
-        );
+
+        $class = ($this instanceof Service) ? 'Container' : 'CDNContainer';
+
+        return $this->resourceList($class, $this->getUrl(null, $filter), $this);
     }
 
+    /**
+     * @return Resource\Account
+     */
+    public function getAccount()
+    {
+        return new Resource\Account($this);
+    }
+    
 }

@@ -2,18 +2,17 @@
 /**
  * PHP OpenCloud library.
  * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
  * @author    Glen Campbell <glen.campbell@rackspace.com>
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\Compute;
 
-use OpenCloud\OpenStack;
+use OpenCloud\Common\Http\Client;
 use OpenCloud\Common\Lang;
-use OpenCloud\Common\Nova;
+use OpenCloud\Common\Service\NovaService;
 use OpenCloud\Common\Exceptions;
 
 /**
@@ -45,64 +44,25 @@ use OpenCloud\Common\Exceptions;
  * </code>
  *
  */
-class Service extends Nova 
+class Service extends NovaService
 {
+    const DEFAULT_TYPE = 'compute';
+    const DEFAULT_NAME = 'cloudServersOpenStack';
 
-    /**
-     * Called when creating a new Compute service object
-     *
-     * _NOTE_ that the order of parameters for this is *different* from the
-     * parent Service class. This is because the earlier parameters are the
-     * ones that most typically change, whereas the later ones are not
-     * modified as often.
-     *
-     * @param \OpenCloud\Identity $conn - a connection object
-     * @param string $serviceRegion - identifies the region of this Compute
-     *      service
-     * @param string $urltype - identifies the URL type ("publicURL",
-     *      "privateURL")
-     * @param string $serviceName - identifies the name of the service in the
-     *      catalog
-     */
-    public function __construct(OpenStack $conn, $serviceName, $serviceRegion, $urltype) 
+    protected $additionalExtensions = array('OS-FLV-DISABLED');
+
+    public function __construct(Client $client, $type = null, $name = null, $region = null, $urlType = null)
     {
-        $this->getLogger()->info(Lang::translate('Initializing compute...'));
-        
-        parent::__construct(
-            $conn,
-            'compute',
-            $serviceName,
-            $serviceRegion,
-            $urltype
-        );
+        parent::__construct($client, $type, $name, $region, $urlType);
 
-        // check the URL version
-        $path = parse_url($this->Url(), PHP_URL_PATH);
-
-        if (substr($path, 0, 3) == '/v1') {
+        if (strpos($this->getUrl()->getPath(), '/v1') !== false) {
             throw new Exceptions\UnsupportedVersionError(sprintf(
                 Lang::translate('Sorry; API version /v1 is not supported [%s]'), 
-                $this->Url()
+                $this->getUrl()
             ));
         }
 
-        $this->load_namespaces();
-        $this->_namespaces[] = 'OS-FLV-DISABLED';
-    }
-
-    /**
-     * Returns the selected endpoint URL of this compute Service
-     *
-     * @param string $resource - an optional child resource. For example,
-     *      passing 'details' would return .../servers/details. Should *not* be
-     *    prefixed with a slash (/).
-     * @param array $args (optional) an array of key-value pairs for query
-     *      strings to append to the URL
-     * @returns string - the requested URL
-     */
-    public function url($resource = 'servers', array $args = array()) 
-    {
-        return parent::Url($resource, $args);
+        $this->loadNamespaces();
     }
 
     /**
@@ -118,7 +78,7 @@ class Service extends Nova
      */
     public function server($id = null) 
     {
-        return new Server($this, $id);
+        return new Resource\Server($this, $id);
     }
 
     /**
@@ -139,8 +99,8 @@ class Service extends Nova
      */
     public function serverList($details = true, array $filter = array()) 
     {
-        $url = $this->url(Server::resourceName() . (($details) ? '/detail' : ''), $filter);
-        return $this->collection('OpenCloud\Compute\Server', $url);
+        $url = $this->getUrl(Resource\Server::resourceName() . (($details) ? '/detail' : ''), $filter);
+        return $this->collection('OpenCloud\Compute\Resource\Server', $url);
     }
 
     /**
@@ -152,7 +112,7 @@ class Service extends Nova
      */
     public function network($id = null) 
     {
-        return new Network($this, $id);
+        return new Resource\Network($this, $id);
     }
 
     /**
@@ -164,7 +124,7 @@ class Service extends Nova
      */
     public function networkList($filter = array()) 
     {
-        return $this->collection('OpenCloud\Compute\Network');
+        return $this->collection('OpenCloud\Compute\Resource\Network');
     }
 
     /**
@@ -179,7 +139,7 @@ class Service extends Nova
      */
     public function image($id = null) 
     {
-        return new Image($this, $id);
+        return new Resource\Image($this, $id);
     }
 
     /**
@@ -201,8 +161,19 @@ class Service extends Nova
      */
     public function imageList($details = true, array $filter = array()) 
     {
-        $url = $this->url('images' . (($details) ? '/detail' : ''), $filter);
-        return $this->collection('OpenCloud\Compute\Image', $url);
+        $url = $this->getUrl('images' . (($details) ? '/detail' : ''), $filter);
+        return $this->collection('OpenCloud\Compute\Resource\Image', $url);
     }
 
+    
+    public function keypair($data = null)
+    {
+        return $this->resource('KeyPair', $data);
+    }
+    
+    public function listKeypairs()
+    {
+        return $this->resourceList('KeyPair', null, $this);
+    }
+    
 }

@@ -37,31 +37,20 @@ class Users extends CI_Controller {
     	$this->load->view('users/dashboard',$data);
     }
 
-    function cloud($cID){
-
-    	if($this->session->userdata('logged_in')!=TRUE){
-			redirect(base_url().'users/login');
-		}
-
-		$data['cloud'] = $this->cloud->get_cloud($cID);
-		$data['virtual_machines'] = "";
-
-		$data['cuser'] = $this->keystone->get_user($data['cloud']['endpoint'],$data['cloud']['admin_token'],$this->session->userdata('username'));
-
-		$this->load->view('users/cloud',$data);
-	}
-
 	function auth($cID,$userID){
 
 		$user = $this->user->get_user($userID);
 		$cloud = $this->cloud->get_cloud($cID);
-
+		
 		$password = $this->aes->decrypt($user->password);
-
-		$response = $this->keystone->login($cloud['dashboard'],$user->username,$password);
-
+		
+		if($cloud['type']=="OpenStack"){
+			$response = $this->keystone->login($cloud['dashboard'],$user->username,$password);
+		} else {
+			$response = $this->vmware->login($cloud['dashboard'],$cID);
+		}
+		
 		print_r($response);
-
 	}
 
    	function session($provider) {

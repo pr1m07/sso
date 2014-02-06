@@ -1,53 +1,75 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
-use OpenCloud\Common\PersistentObject;
 use OpenCloud\CloudMonitoring\Exception;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * Agent class.
- * 
- * @extends ReadOnlyResource
- * @implements ResourceInterface
  */
-class Agent extends ReadOnlyResource implements ResourceInterface
+class Agent extends ReadOnlyResource
 {
-	
-	public $last_connected;
+    /**
+     * Agent IDs are user specified strings that are a maximum of 255 characters and can contain letters, numbers,
+     * dashes and dots.
+     *
+     * @var string
+     */
+    private $id;
+
+    /**
+     * @var int UTC timestamp of last connection.
+     */
+    private $last_connected;
 	
     protected static $json_name = false;
     protected static $json_collection_name = 'values';
     protected static $url_resource = 'agents';
-    	
-	public function baseUrl()
+
+    /**
+     * @return mixed
+     * @throws \OpenCloud\CloudMonitoring\Exception\AgentException
+     */
+    public function getConnections()
 	{
-    	return $this->Service()->Url($this->ResourceName());
+    	if (!$this->getId()) {
+        	throw new Exception\AgentException(
+        	   'Please specify an "ID" value'
+        	);
+    	}
+
+    	return $this->getService()->resourceList('AgentConnection', $this->getUrl('connections'));
 	}
-	
-	public function getConnections()
+
+    /**
+     * @param $connectionId
+     * @return mixed
+     * @throws \OpenCloud\CloudMonitoring\Exception\AgentException
+     */
+    public function getConnection($connectionId)
 	{
-    	if (!$this->id) {
+    	if (!$this->getId()) {
         	throw new Exception\AgentException(
         	   'Please specify an "ID" value'
         	);
     	}
     	
-    	$url = $this->Url($this->id . '/connections');
-    	return $this->Service()->Collection(__NAMESPACE__ . '\\AgentConnection', $url);
-	}
-	
-	public function getConnection($connectionId)
-	{
-    	if (!$this->id) {
-        	throw new Exception\AgentException(
-        	   'Please specify an "ID" value'
-        	);
-    	}
-    	
-    	$url = $this->Url($this->id . '/connections/' . $connectionId);
-    	$response = $this->Request($url);
-    	return $this->Service()->resource('AgentConnection', $response);
+    	$url = clone $this->getUrl();
+        $url->addPath('connections')->addPath($connectionId);
+
+    	$response = $this->getClient()->get($url)->send();
+        $body = Formatter::decode($response);
+
+    	return $this->getService()->resource('AgentConnection', $body);
 	}
 	
 }

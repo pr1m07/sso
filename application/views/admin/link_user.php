@@ -58,7 +58,7 @@ $( document ).ready(function() {
 			<td><?=$value['email']?></td>
 			<td>#</td>
 			<td><?=$value['user_type']?></td>
-			<td><a href="<?=base_url()?>admin/adduser/<?=$cloud['cID']?>/<?=$value['userID']?>"><button type="button" class="btn btn-success btn-xs"><span class="glyphicon glyphicon-user"></span> add to cloud</button></a> <a href="<?=base_url()?>admin/viewuser/<?=$value['username']?>"><button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-primary"></span> view</button></a> <a href="<?=base_url()?>admin/deleteuser/<?=$value['userID']?>"><button type="button" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-trash"></span> delete</button></a></td>
+			<td><a href="<?=base_url()?>admin/<?=$cloud['type'] == 'OpenStack' ? 'adduseros' : 'adduservm' ?>/<?=$cloud['cID']?>/<?=$value['userID']?>"><button type="button" class="btn btn-success btn-xs"><span class="glyphicon glyphicon-user"></span> add to cloud</button></a> <a href="<?=base_url()?>users/profile/<?=$value['userID']?>"><button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-primary"></span> view</button></a> <a href="<?=base_url()?>users/delete/<?=$value['userID']?>"><button type="button" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-trash"></span> delete</button></a></td>
 		</tr>
 
 	<?php } ?>

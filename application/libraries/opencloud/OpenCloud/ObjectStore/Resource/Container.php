@@ -1,325 +1,177 @@
 <?php
 /**
  * PHP OpenCloud library.
- * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
- * @author    Glen Campbell <glen.campbell@rackspace.com>
+ *
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
  */
 
 namespace OpenCloud\ObjectStore\Resource;
 
+use Guzzle\Http\EntityBody;
+use Guzzle\Http\Exception\ClientErrorResponseException;
+use Guzzle\Http\Message\Response;
+use Guzzle\Http\Url;
+use OpenCloud\Common\Constants\Size;
 use OpenCloud\Common\Exceptions;
-use OpenCloud\Common\Lang;
+use OpenCloud\Common\Service\AbstractService;
+use OpenCloud\ObjectStore\Constants\Header as HeaderConst;
+use OpenCloud\ObjectStore\Upload\TransferBuilder;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
  * A container is a storage compartment for your data and provides a way for you 
- * to organize your data. You can think of a container as a folder in Windows® 
- * or a directory in UNIX®. The primary difference between a container and these 
+ * to organize your data. You can think of a container as a folder in Windows 
+ * or a directory in Unix. The primary difference between a container and these 
  * other file system concepts is that containers cannot be nested.
  * 
  * A container can also be CDN-enabled (for public access), in which case you
  * will need to interact with a CDNContainer object instead of this one.
  */
-class Container extends CDNContainer
+class Container extends AbstractContainer
 {
-
+    const METADATA_LABEL = 'Container';
+    
     /**
-     * CDN container (if set).
-     * 
-     * @var CDNContainer|null 
+     * This is the object that holds all the CDN functionality. This Container therefore acts as a simple wrapper and is
+     * interested in storage concerns only.
+     *
+     * @var CDNContainer|null
      */
     private $cdn;
-    
-    /**
-     * Sets the CDN container.
-     * 
-     * @param OpenCloud\ObjectStore\Resource\CDNContainer $cdn
-     */
-    public function setCDN(CDNContainer $cdn)
+
+    public function __construct(AbstractService $service, $data = null)
     {
-        $this->cdn = $cdn;
+        parent::__construct($service, $data);
+
+        // Set metadata items for collection listings
+        if (isset($data->count)) {
+            $this->metadata->setProperty('Object-Count', $data->count);
+        }
+        if (isset($data->bytes)) {
+            $this->metadata->setProperty('Bytes-Used', $data->bytes);
+        }
     }
-    
+
     /**
-     * Returns the CDN container.
-     * 
-     * @returns CDNContainer
+     * Factory method that instantiates an object from a Response object.
+     *
+     * @param Response        $response
+     * @param AbstractService $service
+     * @return static
      */
-    public function getCDN()
+    public static function fromResponse(Response $response, AbstractService $service)
     {
-        if (!$this->cdn) {
+        $self = parent::fromResponse($response, $service);
+        
+        $segments = Url::factory($response->getEffectiveUrl())->getPathSegments();
+        $self->name = end($segments);
+        
+        return $self;
+    }
+
+    /**
+     * Get the CDN object.
+     *
+     * @return null|CDNContainer
+     * @throws \OpenCloud\Common\Exceptions\CdnNotAvailableError
+     */
+    public function getCdn()
+    {
+        if (!$this->isCdnEnabled() || !$this->cdn) {
             throw new Exceptions\CdnNotAvailableError(
-            	Lang::translate('CDN-enabled container is not available')
+            	'Either this container is not CDN-enabled or the CDN is not available'
             );
         }
         
         return $this->cdn;
     }
-    
+
     /**
-     * Backwards compatability.
+     * It would be awesome to put these convenience methods (which are identical to the ones in the Account object) in
+     * a trait, but we have to wait for v5.3 EOL first...
+     *
+     * @return null|string|int
      */
-    public function CDN()
+    public function getObjectCount()
     {
-        return $this->getCDN();
+        return $this->metadata->getProperty('Object-Count');
+    }
+
+    /**
+     * @return null|string|int
+     */
+    public function getBytesUsed()
+    {
+        return $this->metadata->getProperty('Bytes-Used');
+    }
+
+    /**
+     * @param $value
+     * @return mixed
+     */
+    public function setCountQuota($value)
+    {
+        $this->metadata->setProperty('Quota-Count', $value);
+        return $this->saveMetadata($this->metadata->toArray());
+    }
+
+    /**
+     * @return null|string|int
+     */
+    public function getCountQuota()
+    {
+        return $this->metadata->getProperty('Quota-Count');
+    }
+
+    /**
+     * @param $value
+     * @return mixed
+     */
+    public function setBytesQuota($value)
+    {
+        $this->metadata->setProperty('Quota-Bytes', $value);
+        return $this->saveMetadata($this->metadata->toArray());
+    }
+
+    /**
+     * @return null|string|int
+     */
+    public function getBytesQuota()
+    {
+        return $this->metadata->getProperty('Quota-Bytes');
     }
     
-    /**
-     * Makes the container public via the CDN
-     *
-     * @api
-     * @param integer $TTL the Time-To-Live for the CDN container; if NULL,
-     *      then the cloud's default value will be used for caching.
-     * @throws CDNNotAvailableError if CDN services are not available
-     * @return CDNContainer
-     */
-    public function enableCDN($ttl = null)
+    public function delete($deleteObjects = false)
     {
-        $url = $this->getService()->CDN()->url() . '/' . rawurlencode($this->name);
-
-        $headers = $this->metadataHeaders();
-
-        if ($ttl) {
-           
-            // Make sure we're dealing with a real figure
-            if (!is_integer($ttl)) {
-                throw new Exceptions\CdnTtlError(sprintf(
-                    Lang::translate('TTL value [%s] must be an integer'), 
-                    $ttl
-                ));
-            }
-            
-            $headers['X-TTL'] = $ttl;
+        if ($deleteObjects === true) {
+            $this->deleteAllObjects();
         }
 
-        $headers['X-Log-Retention'] = 'True';
-        $headers['X-CDN-Enabled']   = 'True';
+        return $this->getClient()->delete($this->getUrl())->send();
+    }
 
-        // PUT to the CDN container
-        $response = $this->getService()->request($url, 'PUT', $headers);
-
-        // check the response status
-        // @codeCoverageIgnoreStart
-        if ($response->httpStatus() > 202) {
-            throw new Exceptions\CdnHttpError(sprintf(
-                Lang::translate('HTTP error publishing to CDN, status [%d] response [%s]'),
-                $response->httpStatus(),
-                $response->httpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        // refresh the data
-        $this->refresh();
-
-        // return the CDN container object
-        $cdn = new CDNContainer($this->getService()->getCDNService(), $this->name);
-        $this->setCDN($cdn);
+    /**
+     * Deletes all objects that this container currently contains. Useful when doing operations (like a delete) that
+     * require an empty container first.
+     *
+     * @return mixed
+     */
+    public function deleteAllObjects()
+    {
+        $requests = array();
         
-        return $cdn;
-    }
-
-    /**
-     * Backwards compatability.
-     */
-    public function publishToCDN($ttl = null)
-    {
-        return $this->enableCDN($ttl);
-    }
-
-    /**
-     * Disables the containers CDN function.
-     *
-     * Note that the container will still be available on the CDN until
-     * its TTL expires.
-     *
-     * @api
-     * @return void
-     */
-    public function disableCDN()
-    {
-        // Set necessary headers
-        $headers['X-Log-Retention'] = 'False';
-        $headers['X-CDN-Enabled']   = 'False';
-
-        // PUT it to the CDN service
-        $response = $this->getService()->request($this->CDNURL(), 'PUT', $headers);
-
-        // check the response status
-        // @codeCoverageIgnoreStart
-        if ($response->httpStatus() != 201) {
-            throw new Exceptions\CdnHttpError(sprintf(
-                Lang::translate('HTTP error disabling CDN, status [%d] response [%s]'),
-                $response->httpStatus(),
-                $response->httpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
+        $list = $this->objectList();
         
-        return true;
-    }
-
-    /**
-     * Creates a static website from the container
-     *
-     * @api
-     * @link http://docs.rackspace.com/files/api/v1/cf-devguide/content/Create_Static_Website-dle4000.html
-     * @param string $index the index page (starting page) of the website
-     * @return \OpenCloud\HttpResponse
-     */
-    public function createStaticSite($indexHtml)
-    {
-        $headers = array('X-Container-Meta-Web-Index' => $indexHtml);
-        $response = $this->getService()->request($this->url(), 'POST', $headers);
-
-        // check return code
-        // @codeCoverageIgnoreStart
-        if ($response->HttpStatus() > 204) {
-            throw new Exceptions\ContainerError(sprintf(
-                Lang::translate('Error creating static website for [%s], status [%d] response [%s]'),
-                $this->name,
-                $response->httpStatus(),
-                $response->httpBody()
-            ));
-        }
-        // @codeCoverageIgnoreEnd
-
-        return $response;
-    }
-
-    /**
-     * Sets the error page(s) for the static website
-     *
-     * @api
-     * @link http://docs.rackspace.com/files/api/v1/cf-devguide/content/Set_Error_Pages_for_Static_Website-dle4005.html
-     * @param string $name the name of the error page
-     * @return \OpenCloud\HttpResponse
-     */
-    public function staticSiteErrorPage($name)
-    {
-        $headers = array('X-Container-Meta-Web-Error' => $name);
-        $response = $this->getService()->request($this->url(), 'POST', $headers);
-
-        // check return code
-        // @codeCoverageIgnoreStart
-        if ($response->httpStatus() > 204) {
-            throw new Exceptions\ContainerError(sprintf(
-                Lang::translate('Error creating static site error page for [%s], status [%d] response [%s]'),
-                $this->name,
-                $response->httpStatus(),
-                $response->httpBody()
-            ));
+        foreach ($list as $object) {
+            $requests[] = $this->getClient()->delete($object->getUrl());
         }
 
-        return $response;
-        // @codeCoverageIgnoreEnd
+        return $this->getClient()->send($requests);
     }
-
-    /**
-     * Returns the CDN URL of the container (if enabled)
-     *
-     * The CDNURL() is used to manage the container. Note that it is different
-     * from the PublicURL() of the container, which is the publicly-accessible
-     * URL on the network.
-     *
-     * @api
-     * @return string
-     */
-    public function CDNURL()
-    {
-        return $this->getCDN()->url();
-    }
-
-    /**
-     * Returns the Public URL of the container (on the CDN network)
-     *
-     */
-    public function publicURL()
-    {
-        return $this->CDNURI();
-    }
-
-    /**
-     * Returns the CDN info about the container
-     *
-     * @api
-     * @return stdClass
-     */
-    public function CDNinfo($property = null)
-    {
-        // Not quite sure why this is here...
-        // @codeCoverageIgnoreStart
-		if ($this->getService() instanceof CDNService) {
-			return $this->metadata;
-        }
-        // @codeCoverageIgnoreEnd
-        
-        // return NULL if the CDN container is not enabled
-        if (!isset($this->getCDN()->metadata->Enabled) 
-            || $this->getCDN()->metadata->Enabled == 'False'
-        ) {
-            return null;
-        }
-
-        // check to see if it's set
-        if (isset($this->getCDN()->metadata->$property)) {
-            return trim($this->getCDN()->metadata->$property);
-        } elseif ($property !== null) {
-            return null;
-        }
-
-        // otherwise, return the whole metadata object
-        return $this->getCDN()->metadata;
-    }
-
-    /**
-     * Returns the CDN container URI prefix
-     *
-     * @api
-     * @return string
-     */
-    public function CDNURI()
-    {
-        return $this->CDNinfo('Uri');
-    }
-
-    /**
-     * Returns the SSL URI for the container
-     *
-     * @api
-     * @return string
-     */
-    public function SSLURI()
-    {
-        return $this->CDNinfo('Ssl-Uri');
-    }
-
-    /**
-     * Returns the streaming URI for the container
-     *
-     * @api
-     * @return string
-     */
-    public function streamingURI()
-    {
-        return $this->CDNinfo('Streaming-Uri');
-    }
-
-    /**
-     * Returns the IOS streaming URI for the container
-     *
-     * @api
-     * @link http://docs.rackspace.com/files/api/v1/cf-devguide/content/iOS-Streaming-d1f3725.html
-     * @return string
-     */
-    public function iosStreamingURI()
-    {
-        return $this->CDNinfo('Ios-Uri');
-    }
-
+    
     /**
      * Creates a Collection of objects in the container
      *
@@ -339,63 +191,263 @@ class Container extends CDNContainer
      *      names nested in the container are returned.
      * @link http://api.openstack.org for a list of possible parameter
      *      names and values
-     * @return OpenCloud\Collection
+     * @return 'OpenCloud\Common\Collection
      * @throws ObjFetchError
      */
-    public function objectList($params = array())
+    public function objectList(array $params = array())
     {
-        // construct a query string out of the parameters
         $params['format'] = 'json';
-        
-        $queryString = $this->makeQueryString($params);
-
-        // append the query string to the URL
-        $url = $this->url();
-        if (strlen($queryString) > 0) {
-            $url .= '?' . $queryString;
-        }
-        
-        return $this->getService()->collection(
-        	'OpenCloud\ObjectStore\Resource\DataObject', $url, $this
-        );
+        return $this->getService()->resourceList('DataObject', $this->getUrl(null, $params), $this);
     }
 
     /**
-     * Returns a new DataObject associated with this container
+     * Turn on access logs, which track all the web traffic that your data objects accrue.
      *
-     * @param string $name if supplied, the name of the object to return
-     * @return DataObject
+     * @return \Guzzle\Http\Message\Response
      */
-    public function dataObject($name = null)
+    public function enableLogging()
     {
-        return new DataObject($this, $name);
+        return $this->saveMetadata($this->appendToMetadata(array(
+            HeaderConst::ACCESS_LOGS => 'True'
+        )));
     }
 
     /**
-     * Refreshes, then associates the CDN container
+     * Disable access logs.
+     *
+     * @return \Guzzle\Http\Message\Response
      */
+    public function disableLogging()
+    {
+        return $this->saveMetadata($this->appendToMetadata(array(
+            HeaderConst::ACCESS_LOGS => 'False'
+        )));
+    }
+
+    /**
+     * Enable this container for public CDN access.
+     *
+     * @param null $ttl
+     */
+    public function enableCdn($ttl = null)
+    {
+        $headers = array('X-CDN-Enabled' => 'True');
+        if ($ttl) {
+            $headers['X-TTL'] = (int) $ttl;
+        }
+
+        $this->getClient()->put($this->getCdnService()->getUrl($this->name), $headers)->send();
+        $this->refresh();
+    }
+
+    /**
+     * Disables the containers CDN function. Note that the container will still 
+     * be available on the CDN until its TTL expires.
+     * 
+     * @return \Guzzle\Http\Message\Response
+     */
+    public function disableCdn()
+    {
+        return $this->getClient()
+            ->put($this->getCdnService()->getUrl($this->name), array('X-CDN-Enabled' => 'False'))
+            ->send();
+    }
+
     public function refresh($id = null, $url = null)
     {
-        parent::refresh($id, $url);
+        $headers = $this->createRefreshRequest()->send()->getHeaders();
+        $this->setMetadata($headers, true);
         
-        // @codeCoverageIgnoreStart
-		if ($this->getService() instanceof CDNService) {
-			return;
-        }
-        
-        
-        if (null !== ($cdn = $this->getService()->CDN())) {
-            try {
-                $this->cdn = new CDNContainer(
-                    $cdn,
-                    $this->name
-                );
-            } catch (Exceptions\ContainerNotFoundError $e) {
-                $this->cdn = new CDNContainer($cdn);
-                $this->cdn->name = $this->name;
+        try {
+            
+            $cdn = new CDNContainer($this->getService()->getCDNService());
+            $cdn->setName($this->name);
+            
+            $response = $cdn->createRefreshRequest()->send();
+            
+            if ($response->isSuccessful()) {
+                $this->cdn = $cdn;
+                $this->cdn->setMetadata($response->getHeaders(), true);
             }
+            
+        } catch (ClientErrorResponseException $e) {}   
+    }
+
+    /**
+     * Get either a fresh data object (no $info), or get an existing one by passing in data for population.
+     *
+     * @param  mixed $info
+     * @return DataObject
+     */
+    public function dataObject($info = null)
+    {
+        return new DataObject($this, $info);
+    }
+    
+    /**
+     * Retrieve an object from the API. Apart from using the name as an 
+     * identifier, you can also specify additional headers that will be used 
+     * fpr a conditional GET request. These are
+     * 
+     * * `If-Match'
+     * * `If-None-Match'
+     * * `If-Modified-Since'
+     * * `If-Unmodified-Since'
+     * * `Range'  For example: 
+     *      bytes=-5    would mean the last 5 bytes of the object
+     *      bytes=10-15 would mean 5 bytes after a 10 byte offset
+     *      bytes=32-   would mean all dat after first 32 bytes
+     * 
+     * These are also documented in RFC 2616.
+     * 
+     * @param string $name
+     * @param array $headers
+     * @return DataObject
+     */
+    public function getObject($name, array $headers = array())
+    {
+        $response = $this->getClient()
+            ->get($this->getUrl($name), $headers)
+            ->send();
+
+        return $this->dataObject()
+            ->populateFromResponse($response)
+            ->setName($name);
+    }
+
+    /**
+     * Upload a single file to the API.
+     *
+     * @param       $name    Name that the file will be saved as in your container.
+     * @param       $data    Either a string or stream representation of the file contents to be uploaded.
+     * @param array $headers Optional headers that will be sent with the request (useful for object metadata).
+     * @return DataObject
+     */
+    public function uploadObject($name, $data, array $headers = array())
+    {
+        $entityBody = EntityBody::factory($data);
+
+        $url = clone $this->getUrl();
+        $url->addPath($name);
+
+        // @todo for new major release: Return response rather than populated DataObject
+
+        $response = $this->getClient()->put($url, $headers, $entityBody)->send();
+
+        return $this->dataObject()
+            ->populateFromResponse($response)
+            ->setName($name)
+            ->setContent($entityBody);
+    }
+
+    /**
+     * Upload an array of objects for upload. This method optimizes the upload procedure by batching requests for
+     * faster execution. This is a very useful procedure when you just have a bunch of unremarkable files to be
+     * uploaded quickly. Each file must be under 5GB.
+     *
+     * @param array $files With the following array structure:
+     *                      `name' Name that the file will be saved as in your container. Required.
+     *                      `path' Path to an existing file, OR
+     *                      `body' Either a string or stream representation of the file contents to be uploaded.
+     * @param array $headers Optional headers that will be sent with the request (useful for object metadata).
+     *
+     * @throws \OpenCloud\Common\Exceptions\InvalidArgumentError
+     * @return \Guzzle\Http\Message\Response
+     */
+    public function uploadObjects(array $files, array $commonHeaders = array())
+    {
+        $requests = $entities = array();
+
+        foreach ($files as $entity) {
+            
+            if (empty($entity['name'])) {
+	            throw new Exceptions\InvalidArgumentError('You must provide a name.');
+	        }
+            
+            if (!empty($entity['path']) && file_exists($entity['path'])) {
+            	$body = fopen($entity['path'], 'r+');
+
+	        } elseif (!empty($entity['body'])) {
+	            $body = $entity['body'];
+	        } else {
+	            throw new Exceptions\InvalidArgumentError('You must provide either a readable path or a body');
+	        }
+	        
+            $entityBody = $entities[] = EntityBody::factory($body);
+
+            // @codeCoverageIgnoreStart
+            if ($entityBody->getContentLength() >= 5 * Size::GB) {
+                throw new Exceptions\InvalidArgumentError(
+                    'For multiple uploads, you cannot upload more than 5GB per '
+                    . ' file. Use the UploadBuilder for larger files.'
+                );
+            }
+            // @codeCoverageIgnoreEnd
+
+            // Allow custom headers and common
+            $headers = (isset($entity['headers'])) ? $entity['headers'] : $commonHeaders;
+
+            $url = clone $this->getUrl();
+            $url->addPath($entity['name']);
+
+            $requests[] = $this->getClient()->put($url, $headers, $entityBody);
         }
-        // @codeCoverageIgnoreEnd
+
+        $responses = $this->getClient()->send($requests);
+
+        foreach ($entities as $entity) {
+            $entity->close();
+        }
+
+        return $responses;
+    }
+
+    /**
+     * When uploading large files (+5GB), you need to upload the file as chunks using multibyte transfer. This method
+     * sets up the transfer, and in order to execute the transfer, you need to call upload() on the returned object.
+     *
+     * @param array Options
+     * @see \OpenCloud\ObjectStore\Upload\UploadBuilder::setOptions for a list of accepted options.
+     * @throws \OpenCloud\Common\Exceptions\InvalidArgumentError
+     * @return mixed
+     */
+    public function setupObjectTransfer(array $options = array())
+    {
+        // Name is required
+        if (empty($options['name'])) {
+            throw new Exceptions\InvalidArgumentError('You must provide a name.');
+        }
+
+        // As is some form of entity body
+        if (!empty($options['path']) && file_exists($options['path'])) {
+            $body = fopen($options['path'], 'r+');
+        } elseif (!empty($options['body'])) {
+            $body = $options['body'];
+        } else {
+            throw new Exceptions\InvalidArgumentError('You must provide either a readable path or a body');
+        }
+        
+        // Build upload
+        $transfer = TransferBuilder::newInstance()
+            ->setOption('objectName', $options['name'])
+            ->setEntityBody(EntityBody::factory($body))
+            ->setContainer($this);
+        
+        // Add extra options
+        if (!empty($options['metadata'])) {
+            $transfer->setOption('metadata', $options['metadata']);
+        }
+        if (!empty($options['partSize'])) {
+            $transfer->setOption('partSize', $options['partSize']);
+        }
+        if (!empty($options['concurrency'])) {
+            $transfer->setOption('concurrency', $options['concurrency']);
+        }
+        if (!empty($options['progress'])) {
+            $transfer->setOption('progress', $options['progress']);
+        }
+
+        return $transfer->build();
     }
 
 }

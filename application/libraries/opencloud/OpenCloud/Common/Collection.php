@@ -1,28 +1,29 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\Common;
 
 /**
- * Provides an abstraction for working with ordered sets of objects
- *
- * Collection objects are used whenever there are multiples; for example,
- * multiple objects in a container, or multiple servers in a service.
- *
- * @since 1.0
- * @author Glen Campbell <glen.campbell@rackspace.com>
- * @author Jamie Hannaford <jamie.hannaford@rackspace.com>
+ * @deprecated
+ * @codeCoverageIgnore
  */
-class Collection extends Base 
+class Collection extends Base
 {
 
     private $service;
-    private $itemclass;
-    private $itemlist = array();
+    private $itemClass;
+    private $itemList = array();
     private $pointer = 0;
-    private $sortkey;
-    private $next_page_class;
-    private $next_page_callback;
-    private $next_page_url;
+    private $sortKey;
+    private $nextPageClass;
+    private $nextPageCallback;
+    private $nextPageUrl;
 
     /**
      * A Collection is an array of objects
@@ -40,79 +41,55 @@ class Collection extends Base
      *      (assumed to be the name of the factory method)
      * @param array $arr - the input array
      */
-    public function __construct($service, $itemclass, $array) 
+    public function __construct($service, $class, array $array = array())
     {
-        $this->service = $service;
+        $service->getLogger()->deprecated(__METHOD__, 'OpenCloud\Common\Collection\CollectionBuilder');
 
-        $this->getLogger()->info(
-            'Collection:service={class}, class={itemClass}, array={array}', 
-            array(
-                'class'     => get_class($service), 
-                'itemClass' => $itemclass, 
-                'array'     => print_r($array, true)
-            )
-        );
+        $this->setService($service);
 
-        $this->next_page_class = $itemclass;
+        $this->setNextPageClass($class);
 
-        if (false !== ($classNamePos = strrpos($itemclass, '\\'))) {
-            $this->itemclass = substr($itemclass, $classNamePos + 1);
-        } else {
-            $this->itemclass = $itemclass;
-        }
+        // If they've supplied a FQCN, only get the last part
+        $class = (false !== ($classNamePos = strrpos($class, '\\')))
+            ? substr($class, $classNamePos + 1)
+            : $class;
 
-        if (!is_array($array)) {
-            throw new Exceptions\CollectionError(
-                Lang::translate('Cannot create a Collection without an array')
-            );
-        }
+        $this->setItemClass($class);
 
-        // save the array of items
+        // Set data
         $this->setItemList($array);
     }
-    
+
     /**
      * Set the entire data array.
-     * 
+     *
      * @param array $array
      */
-    public function setItemList(array $array)
+    private function setItemList(array $array)
     {
-        $this->itemlist = $array;
+        $this->itemList = $array;
+        return $this;
     }
-    
+
     /**
      * Retrieve the entire data array.
-     * 
+     *
      * @return array
      */
     public function getItemList()
     {
-        return $this->itemlist;
+        return $this->itemList;
     }
-    
+
     /**
-     * Returns the number of items in the collection
+     * Set the service.
      *
-     * For most services, this is the total number of items. If the Collection
-     * is paginated, however, this only returns the count of items in the
-     * current page of data.
-     * 
-     * @return int
+     * @param Service|PersistentObject $service
      */
-    public function count()
+    public function setService($service)
     {
-        return count($this->itemlist);
-    }
-    
-    /**
-     * Pseudonym for count()
-     * 
-     * @codeCoverageIgnore
-     */
-    public function size() 
-    {
-        return $this->count();
+        $this->service = $service;
+        return $this;
     }
 
     /**
@@ -120,9 +97,122 @@ class Collection extends Base
      *
      * @return Service
      */
-    public function service() 
+    public function getService()
     {
         return $this->service;
+    }
+
+    /**
+     * Set the resource class name.
+     */
+    private function setItemClass($itemClass)
+    {
+        $this->itemClass = $itemClass;
+        return $this;
+    }
+
+    /**
+     * Get item class.
+     */
+    private function getItemClass()
+    {
+        return $this->itemClass;
+    }
+
+    /**
+     * Set the key that will be used for sorting.
+     */
+    private function setSortKey($sortKey)
+    {
+        $this->sortKey = $sortKey;
+        return $this;
+    }
+
+    /**
+     * Get the key that will be used for sorting.
+     */
+    private function getSortKey()
+    {
+        return $this->sortKey;
+    }
+
+    /**
+     * Set next page class.
+     */
+    private function setNextPageClass($nextPageClass)
+    {
+        $this->nextPageClass = $nextPageClass;
+        return $this;
+    }
+
+    /**
+     * Get next page class.
+     */
+    private function getNextPageClass()
+    {
+        return $this->nextPageClass;
+    }
+
+    /**
+     * for paginated collection, sets the callback function and URL for
+     * the next page
+     *
+     * The callback function should have the signature:
+     *
+     *      function Whatever($class, $url, $parent)
+     *
+     * and the `$url` should be the URL of the next page of results
+     *
+     * @param callable $callback the name of the function (or array of
+     *      object, function name)
+     * @param string $url the URL of the next page of results
+     * @return void
+     */
+    public function setNextPageCallback($callback, $url)
+    {
+        $this->nextPageCallback = $callback;
+        $this->nextPageUrl = $url;
+        return $this;
+    }
+
+    /**
+     * Get next page callback.
+     */
+    private function getNextPageCallback()
+    {
+        return $this->nextPageCallback;
+    }
+
+    /**
+     * Get next page URL.
+     */
+    private function getNextPageUrl()
+    {
+        return $this->nextPageUrl;
+    }
+
+    /**
+     * Returns the number of items in the collection
+     *
+     * For most services, this is the total number of items. If the Collection
+     * is paginated, however, this only returns the count of items in the
+     * current page of data.
+     *
+     * @return int
+     */
+    public function count()
+    {
+        return count($this->getItemList());
+    }
+
+    /**
+     * Pseudonym for count()
+     *
+     * @codeCoverageIgnore
+     */
+    public function size()
+    {
+        return $this->count();
     }
 
     /**
@@ -131,7 +221,7 @@ class Collection extends Base
      * @api
      * @return void
      */
-    public function reset() 
+    public function reset()
     {
         $this->pointer = 0;
     }
@@ -145,10 +235,31 @@ class Collection extends Base
      * @api
      * @return Base the first item in the set
      */
-    public function first() 
+    public function first()
     {
         $this->reset();
         return $this->next();
+    }
+
+    /**
+     * Return the item at a particular point of the array.
+     *
+     * @param  mixed $offset
+     * @return mixed
+     */
+    public function getItem($pointer)
+    {
+        return (isset($this->itemList[$pointer])) ? $this->itemList[$pointer] : false;
+    }
+
+    /**
+     * Add an item to this collection
+     *
+     * @param mixed $item
+     */
+    public function addItem($item)
+    {
+        $this->itemList[] = $item;
     }
 
     /**
@@ -157,22 +268,29 @@ class Collection extends Base
      * @api
      * @return Base the next item or FALSE if at the end of the page
      */
-    public function next() 
+    public function next()
     {
         if ($this->pointer >= $this->count()) {
             return false;
         }
-        
-        $service = $this->service();
-        
-        if (method_exists($service, $this->itemclass)) {
-            return $service->{$this->itemclass}($this->itemlist[$this->pointer++]);
-        } elseif (method_exists($service, 'resource')) {
-            return $service->resource($this->itemclass, $this->itemlist[$this->pointer++]);
+
+        $data  = $this->getItem($this->pointer++);
+        $class = $this->getItemClass();
+
+        // Are there specific methods in the parent/service that can be used to
+        // instantiate the resource? Currently supported: getResource(), resource()
+        foreach (array($class, 'get' . ucfirst($class)) as $method) {
+            if (method_exists($this->service, $method)) {
+                return call_user_func(array($this->service, $method), $data);
+            }
         }
-        // @codeCoverageIgnoreStart
+
+        // Backup method
+        if (method_exists($this->service, 'resource')) {
+            return $this->service->resource($class, $data);
+        }
+
         return false;
-        // @codeCoverageIgnoreEnd
     }
 
     /**
@@ -186,10 +304,10 @@ class Collection extends Base
      * @param string $keyname the name of the field to use as the sort key
      * @return void
      */
-    public function sort($keyname = 'id') 
+    public function sort($keyname = 'id')
     {
-        $this->sortkey = $keyname;
-        usort($this->itemlist, array($this, 'sortCompare'));
+        $this->setSortKey($keyname);
+        usort($this->itemList, array($this, 'sortCompare'));
     }
 
     /**
@@ -226,7 +344,7 @@ class Collection extends Base
      * @returns void
      * @throws DomainError if callback doesn't return a boolean value
      */
-    public function select($testfunc) 
+    public function select($testfunc)
     {
         foreach ($this->getItemList() as $index => $item) {
             $test = call_user_func($testfunc, $item);
@@ -236,7 +354,7 @@ class Collection extends Base
                 );
             }
             if ($test === false) {
-                unset($this->itemlist[$index]);
+                unset($this->itemList[$index]);
             }
         }
     }
@@ -258,59 +376,29 @@ class Collection extends Base
      * @api
      * @return Collection if there are more pages of results, otherwise FALSE
      */
-    public function nextPage() 
+    public function nextPage()
     {
-        if (isset($this->next_page_url)) {
-            return call_user_func(
-                $this->next_page_callback,
-                $this->next_page_class,
-                $this->next_page_url
-            );
-        }
-        // @codeCoverageIgnoreStart
-        return false;
-        // @codeCoverageIgnoreEnd
-    }
-
-    /**
-     * for paginated collection, sets the callback function and URL for
-     * the next page
-     *
-     * The callback function should have the signature:
-     *
-     *      function Whatever($class, $url, $parent)
-     *
-     * and the `$url` should be the URL of the next page of results
-     *
-     * @param callable $callback the name of the function (or array of
-     *      object, function name)
-     * @param string $url the URL of the next page of results
-     * @return void
-     */
-    public function setNextPageCallback($callback, $url) 
-    {
-        $this->next_page_callback = $callback;
-        $this->next_page_url = $url;
+        return ($this->getNextPageUrl() !== null)
+            ? call_user_func($this->getNextPageCallback(), $this->getNextPageClass(), $this->getNextPageUrl())
+            : false;
     }
 
     /**
      * Compares two values of sort keys
      */
-    private function sortCompare($a, $b) 
+    private function sortCompare($a, $b)
     {
-        $key = $this->sortkey;
+        $key = $this->getSortKey();
 
-        // handle strings with strcmp()
+        // Handle strings
         if (is_string($a->$key)) {
             return strcmp($a->$key, $b->$key);
         }
 
-        // handle others with logical comparisons
+        // Handle others with logical comparisons
         if ($a->$key == $b->$key) {
             return 0;
-        }
-
-        if ($a->$key < $b->$key) {
+        } elseif ($a->$key < $b->$key) {
             return -1;
         } else {
             return 1;

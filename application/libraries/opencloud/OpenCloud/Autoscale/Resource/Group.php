@@ -2,18 +2,19 @@
 /**
  * PHP OpenCloud library.
  * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
 namespace OpenCloud\Autoscale\Resource;
 
 use OpenCloud\Common\Exceptions;
+use OpenCloud\Common\Http\Message\Formatter;
 
 /**
- * An autoscaling group is monitored by Rackspace Cloud Monitoring. When 
+ * An autoscaling group is monitored by Rackspace CloudMonitoring. When
  * Monitoring triggers an alarm for high utilization within the autoscaling 
  * group, a webhook is triggered. The webhook stimulates the autoscale service 
  * which consults a policy in accordance with the webhook. The policy determines 
@@ -31,20 +32,19 @@ use OpenCloud\Common\Exceptions;
  */
 class Group extends AbstractResource
 {
+    private $id;
+    private $links;
+    private $groupConfiguration;
+    private $launchConfiguration;
+    private $scalingPolicies;
+    private $name;
+    protected $metadata;
     
-    public $id;
-    public $links;
-    public $groupConfiguration;
-    public $launchConfiguration;
-    public $scalingPolicies;
-    public $name;
-    public $metadata;
-    
-    public $active;
-    public $activeCapacity;
-    public $pendingCapacity;
-    public $desiredCapacity;
-    public $paused;
+    private $active;
+    private $activeCapacity;
+    private $pendingCapacity;
+    private $desiredCapacity;
+    private $paused;
     
     protected static $json_name = 'group';
     protected static $url_resource = 'groups';
@@ -74,26 +74,7 @@ class Group extends AbstractResource
     public $associatedCollections = array(
         'scalingPolicies' => 'ScalingPolicy'
     );
-    
-    /**
-     * {@inheritDoc}
-     */
-    public function create($params = array())
-    {
-        if (is_string($params)) {
-            $params = json_decode($params);
-            $this->checkJsonError();
-        } elseif (!is_object($params) && !is_array($params)) {
-            throw new Exceptions\InvalidArgumentError(
-                'You must provide either a string or an array/object'
-            );
-        }
-
-        $this->populate($params, false);
         
-        return parent::create();
-    }
-    
     /**
      * {@inheritDoc}
      */
@@ -113,9 +94,14 @@ class Group extends AbstractResource
      */
     public function getState()
     {
-        $object = $this->customAction($this->url('state', true));
-        
-        return (!empty($object->group)) ? $object->group : false;
+        $response = $this->getService()
+            ->getClient()
+            ->get($this->url('state'))
+            ->send();
+
+        $body = Formatter::decode($response);
+
+        return (!empty($body->group)) ? $body->group : false;
     }
     
     /**
@@ -125,13 +111,13 @@ class Group extends AbstractResource
      */
     public function getGroupConfig()
     {
-        if ($this->groupConfiguration instanceof GroupConfiguration) {
-            return $this->groupConfiguration;
+        if (($config = $this->getProperty('groupConfiguration')) instanceof GroupConfiguration) {
+            return $config;
         }
         
         $config = $this->getService()->resource('GroupConfiguration');
         $config->setParent($this);
-        if ($this->id) {
+        if ($this->getId()) {
             $config->refresh(null, $config->url());
         }
         return $config;
@@ -144,13 +130,13 @@ class Group extends AbstractResource
      */
     public function getLaunchConfig()
     {
-        if ($this->launchConfiguration instanceof LaunchConfiguration) {
-            return $this->launchConfiguration;
+        if (($config = $this->getProperty('launchConfiguration')) instanceof LaunchConfiguration) {
+            return $config;
         }
         
         $config = $this->getService()->resource('LaunchConfiguration');
         $config->setParent($this);
-        if ($this->id) {
+        if ($this->getId()) {
             $config->refresh(null, $config->url());
         }
         return $config;
@@ -163,7 +149,7 @@ class Group extends AbstractResource
      */
     public function pause()
     {
-        return $this->customAction($this->url('pause', true), 'POST');
+        return $this->getService()->getClient()->post($this->url('pause'))->send();
     }
     
     /**
@@ -173,7 +159,7 @@ class Group extends AbstractResource
      */
     public function resume()
     {
-        return $this->customAction($this->url('resume', true), 'POST');
+        return $this->getService()->getClient()->post($this->url('resume'))->send();
     }
     
     /**
@@ -181,9 +167,12 @@ class Group extends AbstractResource
      * 
      * @return Collection
      */
-    public function getPolicies()
+    public function getScalingPolicies($override = false)
     {
-        return $this->service()->resourceList('ScalingPolicy', null, $this);
+        if (null === $this->scalingPolicies || $override === true) {
+            $this->scalingPolicies = $this->getService()->resourceList('ScalingPolicy', null, $this);
+        }
+        return $this->scalingPolicies;
     }
     
     /**
@@ -192,7 +181,7 @@ class Group extends AbstractResource
      * @param  object|int $id
      * @return ScalingPolicy
      */
-    public function getPolicy($id = null)
+    public function getScalingPolicy($id = null)
     {
         $config = $this->getService()->resource('ScalingPolicy');
         $config->setParent($this);

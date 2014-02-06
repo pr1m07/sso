@@ -2,9 +2,9 @@
 /**
  * PHP OpenCloud library.
  * 
- * @copyright Copyright 2013 Rackspace US, Inc. See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.6.0
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
@@ -42,28 +42,6 @@ abstract class AbstractResource extends PersistentObject
     public $associatedCollections = array();
     
     /**
-     * Returns the URL for this resource.
-     * 
-     * @param  string|null $subResource
-     * @param  bool        $includeId
-     * @return string
-     */
-    public function url($subResource = null, $includeId = true)
-    {
-        $url = $this->parent()->url($this->resourceName());
-        
-        if ($includeId && $this->id) {
-            $url .= '/' . $this->id;
-        }
-        
-        if ($subResource) {
-            $url .= '/' . $subResource;
-        }
-        
-        return $url;
-    }
-    
-    /**
      * Creates the object which will be JSON encoded for request.
      * 
      * @return \stdClass
@@ -73,14 +51,14 @@ abstract class AbstractResource extends PersistentObject
         $object = new \stdClass;
 
         foreach ($this->createKeys as $key) {
-            if (!empty($this->$key)) {
-                $object->$key = $this->$key;
+            if ($value = $this->getProperty($key)) {
+                $object->$key = $value;
             }
         }
         
         if (!empty($this->metadata)) {
             $object->metadata = new \stdClass;
-            foreach ($this->metadata as $key => $value) {
+            foreach ($this->getMetadata()->toArray() as $key => $value) {
                 $object->metadata->$key = $value;
             }
         }
@@ -103,17 +81,9 @@ abstract class AbstractResource extends PersistentObject
         return $existing + $params;
     }
     
-    /**
-     * Factory method for returning a resource. This is mostly used when a 
-     * Collection instantiates an individual resource (i.e. in next() calls).
-     * 
-     * @param  string $name
-     * @param  string $info
-     * @return AbstractResource
-     */
-    public function resource($name, $info)
+    public function primaryKeyField()
     {
-        return $this->getService()->resource($name, $info);
+        return 'id';
     }
     
 }

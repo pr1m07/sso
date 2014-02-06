@@ -1,34 +1,30 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
-use OpenCloud\Common\PersistentObject;
-use OpenCloud\CloudMonitoring\Exception;
-
 /**
  * AgentConnection class.
- * 
- * @extends ReadOnlyResource
  */
-class AgentConnection extends ReadOnlyResource implements ResourceInterface
+class AgentConnection extends ReadOnlyResource
 {
-
-    public $guid;
-    public $agent_id;
-    public $endpoint;
-    public $process_version;
-    public $bundle_version;
-    public $agent_ip;
+    private $id;
+    private $guid;
+    private $agent_id;
+    private $endpoint;
+    private $process_version;
+    private $bundle_version;
+    private $agent_ip;
 
     protected static $json_name = false;
     protected static $json_collection_name = 'values';
     protected static $url_resource = 'agents';
     
-    /**
-     * @codeCoverageIgnore
-     */
-    public function baseUrl()
-    {
-    }
-
 }

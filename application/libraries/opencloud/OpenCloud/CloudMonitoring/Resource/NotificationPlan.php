@@ -1,15 +1,41 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
-use OpenCloud\CloudMonitoring\Exception;
-
-class NotificationPlan extends AbstractResource implements ResourceInterface
+class NotificationPlan extends AbstractResource
 {
-	public $label;
-	public $critical_state;
-	public $ok_state;
-	public $warning_state;
+    /**
+     * @var string
+     */
+    private $id;
+
+    /**
+     * @var string Friendly name for the notification plan.
+     */
+    private $label;
+
+    /**
+     * @var array The notification list to send to when the state is CRITICAL.
+     */
+    private $critical_state;
+
+    /**
+     * @var array The notification list to send to when the state is OK.
+     */
+    private $ok_state;
+
+    /**
+     * @var array The notification list to send to when the state is WARNING.
+     */
+    private $warning_state;
 	
     protected static $json_name = false;
     protected static $json_collection_name = 'values';
@@ -26,9 +52,4 @@ class NotificationPlan extends AbstractResource implements ResourceInterface
         'warning_state'
     );
 
-    public function baseUrl()
-    {
-        return $this->Service()->Url($this->ResourceName());
-    }
-	
 }

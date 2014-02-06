@@ -6,6 +6,7 @@
 function selectCheck(nameSelect){
    var val = nameSelect.options[nameSelect.selectedIndex].value;
    document.getElementById("OpenStack").style.display = val == 'OpenStack' ? "block" : 'none';
+   document.getElementById("VMware").style.display = val == 'VMware' ? "block" : 'none';
 }
 
 </script>
@@ -30,7 +31,7 @@ function selectCheck(nameSelect){
                 <select class="form-control" style="width:200px" name="type" onchange="selectCheck(this);">
                   <option value="0">select type</option>
                   <option value="OpenStack">OpenStack</option>
-                  <option value="Hyper-V">Hyper-V</option>
+                  <!--option value="Hyper-V">Hyper-V</option-->
                   <option value="VMware">VMware</option>
                 </select>
               </div>
@@ -44,12 +45,24 @@ function selectCheck(nameSelect){
           <div class="col-md-5 pull-right" style="display:none;" id="OpenStack">
             <p class="pull-right"><img src="<?=base_url()?>assets/img/OpenStack.png" width="40px"></p>
             <p>Additional info for <span class="text-danger">OpenStack</span></p>
-            <p>Admin user:<input class="form-control" name="admin_user" type="text" /></p>
-            <p>Admin pass:<input class="form-control" name="admin_pass" type="text" /></p>
-            <p>Admin token:<input class="form-control" name="admin_token" type="text" /></p>
-            <p>User tenant:<input class="form-control" name="user_tenant" type="text" /></p>
+            <p>Admin user:<input class="form-control" name="admin_user_os" type="text" /></p>
+            <p>Admin pass:<input class="form-control" name="admin_pass_os" type="text" /></p>
+            <p>Admin token:<input class="form-control" name="admin_token_os" type="text" /></p>
+            <p>User tenant:<input class="form-control" name="user_tenant_os" type="text" /></p>
             <p>Active: <input type="checkbox" name="active" value="1" checked></p>
           </div>
+          
+          <div class="col-md-5 pull-right" style="display:none;" id="VMware">
+            <p class="pull-right"><img src="<?=base_url()?>assets/img/vmware.png" width="40px"></p>
+            <p>Additional info for <span class="text-danger">VMware</span></p>
+            <p>Admin user:<input class="form-control" name="admin_user" type="text" /></p>
+            <p>Admin pass:<input class="form-control" name="admin_pass" type="text" /></p>
+            <p>Admin token (optional):<input class="form-control" name="admin_token" type="text" /></p>
+            <p>Organization:<input class="form-control" name="user_tenant" type="text" /></p>
+            <p>Active: <input type="checkbox" name="active" value="1" checked></p>
+            <p>SAML Metadata:<textarea class="form-control" name="metadata" rows="10" /></textarea></p>
+          </div>
+          
         </div>
     </form>
   </div>

@@ -1,9 +1,9 @@
 <?php
 /**
- * @copyright Copyright 2012-2013 Rackspace US, Inc. 
-  See COPYING for licensing information.
- * @license   https://www.apache.org/licenses/LICENSE-2.0 Apache 2.0
- * @version   1.5.9
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
  * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
  */
 
@@ -23,7 +23,7 @@ class Logger extends AbstractLogger
      * 
      * @var bool
      */
-    private $enabled = false;
+    private $enabled;
     
     /**
      * These are the levels which will always be outputted - regardless of 
@@ -48,7 +48,17 @@ class Logger extends AbstractLogger
         'dateFormat'   => 'd/m/y H:I',
         'delimeter'    => ' - '
     );
-    
+
+    public function __construct($enabled = false)
+    {
+        $this->enabled = $enabled;
+    }
+
+    public static function newInstance()
+    {
+        return new static();
+    }
+
     /**
      * Determines whether a log level needs to be outputted.
      * 
@@ -96,9 +106,9 @@ class Logger extends AbstractLogger
      * 
      * @return bool
      */
-    public function getEnabled()
+    public function isEnabled()
     {
-        return $this->enabled;
+        return $this->enabled === true;
     }
     
     /**
@@ -111,6 +121,7 @@ class Logger extends AbstractLogger
         foreach ($options as $key => $value) {
             $this->setOption($key, $value);
         }
+        return $this;
     }
     
     /**
@@ -133,6 +144,7 @@ class Logger extends AbstractLogger
     {
         if ($this->optionExists($key)) {
             $this->options[$key] = $value;
+            return $this;
         }
     }
     
@@ -169,10 +181,7 @@ class Logger extends AbstractLogger
      */
     public function log($level, $message, array $context = array())
     {
-        if ($this->outputIsUrgent($level) 
-            || $this->getEnabled() === true 
-            || RAXSDK_DEBUG === true
-        ) {
+        if ($this->outputIsUrgent($level) || $this->isEnabled()) {
             $this->dispatch($message, $context);
         }
     }
@@ -210,11 +219,17 @@ class Logger extends AbstractLogger
             }
             
             // Output to file
-            file_put_contents($file, $this->formatFileLine($output));
+            file_put_contents($file, $this->formatFileLine($output), FILE_APPEND);
         } else {
-            
+
             echo $output;
         }
+    }
+
+    public function deprecated($method, $new)
+    {
+        $string = sprintf('The %s method is deprecated, please use %s instead', $method, $new);
+        return $this->warning($string);
     }
     
 }

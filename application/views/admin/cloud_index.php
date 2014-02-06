@@ -34,6 +34,7 @@ $( document ).ready(function() {
 
 		<thead>
           <tr>
+          	<th></th>
             <th>Type</th>
             <th>Title</th>
             <th>Username</th>
@@ -46,6 +47,7 @@ $( document ).ready(function() {
 	<?php	foreach ($clouds as $row) {
 	?>
 		<tr>
+			<td><img src="<?=base_url()?>assets/img/<?=$row['type']?>.png" width="20px"></td>
 			<td><?=$row['type']?></td>
 			<td><?=$row['name']?></td>
 			<td><?=$row['username']?></td>

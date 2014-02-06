@@ -48,7 +48,7 @@ $('#clouds').dataTable({
 			<td><?=$row['name']?></td>
 			<td><?=strftime('%d-%m-%Y', strtotime($row['date']))?></td>
 			<td><?php echo $row['active']==1 ? "yes" : "no"; ?></td>
-			<td><a href="<?=base_url()?>users/cloud/<?=$row['cID']?>"><button type="button" class="btn btn-primary btn-xs"><span class="glyphicon glyphicon-search"></span> view</button></a> <a href="<?=$row['endpoint']?>"><button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-cloud"></span> login</button></a> <a href="#"><button type="button" class="btn btn-success btn-xs"><span class="glyphicon glyphicon-cog"></span> virtual machines</button></a></td>
+			<td><a href="<?=base_url()?>clouds/cloud/<?=$row['cID']?>"><button type="button" class="btn btn-primary btn-xs"><span class="glyphicon glyphicon-search"></span> view</button></a> <a href="<?=base_url()?>users/auth/<?=$row['cID']?>/<?=$this->session->userdata('userID')?>"><button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-cloud"></span> login</button></a> <a href="<?=base_url()?>clouds/new_vm/<?=$row['cID']?>"><button type="button" class="btn btn-success btn-xs"><span class="glyphicon glyphicon-plus"></span> add virtual machine</button></a></td>
 		</tr>
 
 	<?php } ?>

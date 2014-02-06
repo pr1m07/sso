@@ -1,21 +1,25 @@
 <?php
+/**
+ * PHP OpenCloud library.
+ * 
+ * @copyright 2013 Rackspace Hosting, Inc. See LICENSE for information.
+ * @license   https://www.apache.org/licenses/LICENSE-2.0
+ * @author    Glen Campbell <glen.campbell@rackspace.com>
+ * @author    Jamie Hannaford <jamie.hannaford@rackspace.com>
+ */
 
 namespace OpenCloud\CloudMonitoring\Resource;
 
-use OpenCloud\Common\PersistentObject;
 use OpenCloud\CloudMonitoring\Exception;
+use OpenCloud\Common\Collection\ResourceIterator;
 
 /**
  * Agent class.
- * 
- * @extends ReadOnlyResource
- * @implements ResourceInterface
  */
-class AgentHost extends ReadOnlyResource implements ResourceInterface
+class AgentHost extends ReadOnlyResource
 {
-    
-    public $token;
-    public $label;
+    private $token;
+    private $label;
     
     protected static $json_name = false;
     protected static $json_collection_name = 'info';
@@ -32,11 +36,6 @@ class AgentHost extends ReadOnlyResource implements ResourceInterface
         'who'
     );
 
-    public function baseUrl()
-    {
-        return $this->Parent()->Url($this->Parent()->id . '/' . $this->ResourceName());
-    }
-
     public function info($type)
     {
         if (!in_array($type, $this->allowedTypes)) {
@@ -46,7 +45,7 @@ class AgentHost extends ReadOnlyResource implements ResourceInterface
             ));
         }
 
-        return $this->Service()->Collection(__NAMESPACE__ . '\AgentHostInfo', $this->Url($type));
-    }    
-    
+        return $this->getService()->resourceList('AgentHostInfo', $this->getUrl($type), $this);
+    }
+
 }
