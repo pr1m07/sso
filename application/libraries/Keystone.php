@@ -69,6 +69,7 @@ class Keystone
 	{	
 		$this->CI->curl->create($url.'tenants/?name='.$tenant);
 		$this->CI->curl->http_header('X-Auth-Token:'. $admin_token);
+		
 		$response = json_decode($this->CI->curl->execute());
 
 		if($this->check_error($response))
@@ -141,7 +142,7 @@ class Keystone
 	    }
     	</script>
 		</head><body onload="loadit()">
-		 <form id="myform" style="display:none" autocomplete="on" class="" action="'.$url.'/" method="POST"  >
+		 <form id="myform" style="display:none" autocomplete="on" class="" action="'.$url.'" method="POST"  >
 		 	<!--input type="hidden" name="csrfmiddlewaretoken" value="'.$csrfmiddlewaretoken.'" /-->
 		 	<input id="id_region" name="region" type="hidden" value="'.$id_region.'" />
 		 	<input id="id_username" name="username" type="text" value="'.$user.'" />

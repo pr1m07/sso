@@ -96,8 +96,8 @@ $("button").click(function() {
       <!--td><?=$value['image']?></td-->
       <td><?=$value['flavor']?></td>
       <td>
-        <button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-bullhorn"></span> more info</button>
-        <button type="button" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-trash"></span> delete</button>
+        <!--button type="button" class="btn btn-info btn-xs"><span class="glyphicon glyphicon-bullhorn"></span> more info</button-->
+        <a href="<?=base_url()?>clouds/deletevm/<?=$value['cID']?>/<?=$value['rvmID']?>"><button type="button" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-trash"></span> delete</button></a>
       </td>
     </tr>
 

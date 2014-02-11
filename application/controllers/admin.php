@@ -272,7 +272,7 @@ class Admin extends CI_Controller {
 				} else {
 					$password = $this->aes->decrypt($local_user->password);
 				}
-
+				
 				$user = array( 'user' => 
 					array(
 						'name' => $local_user->username,
@@ -285,7 +285,7 @@ class Admin extends CI_Controller {
 				);
 
 				$response = $this->keystone->create_user($cloud['endpoint'],$cloud['admin_token'],json_encode($user));
-
+				
 				$cloud_user = array(
 						'userID' => $userID, 
 						'cID' => $cID,
@@ -330,6 +330,20 @@ class Admin extends CI_Controller {
 			$response = $this->vmware->delete_user($cloud['endpoint'],$cloud['admin_token'],$ucID);
 
 		redirect(base_url().'admin/cloud/'.$cID);
+	}
+	
+	function auth($cID,$userID){
+
+		$user = $this->user->get_user($userID);
+		$cloud = $this->cloud->get_cloud($cID);
+
+		if($cloud['type']=="OpenStack"){
+			$response = $this->keystone->login($cloud['dashboard'],$user->username,$cloud['admin_pass']);
+		} else {
+			$response = $this->vmware->login($cloud['dashboard'],$cID);
+		}
+		
+		print_r($response);
 	}
 }
 ?>

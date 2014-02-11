@@ -84,6 +84,19 @@ class Clouds extends CI_Controller {
 			$this->load->view('clouds/new_vm',$data);
 		}
 	}
+	
+	function deletevm($cID,$rvmID){
+		$cloud = $this->cloud->get_cloud($cID);
+		$this->cloud->delete_vm($rvmID);
+		
+		if($cloud['type'] == 'OpenStack')
+			$response = $this->openstack->delete_server($cID,$rvmID);
+		else
+			//$response = $this->vmware->delete_user($cloud['endpoint'],$cloud['admin_token'],$ucID);
+			$this->display->_output('Under development');
+
+		redirect(base_url().'clouds/cloud/'.$cID);
+	}
 
 }
 

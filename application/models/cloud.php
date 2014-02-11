@@ -109,6 +109,11 @@ class Cloud extends CI_Model {
 		$this->db->insert('virtualm',$data);
 	}
 	
+	function delete_vm($rvmID){
+		$this->db->where('rvmID',$rvmID);
+		$this->db->delete('virtualm');
+	}
+	
 	function get_vms_by_user($cID) {
 		$this->db->select('virtualm.*,users.*')
 			->from('virtualm')

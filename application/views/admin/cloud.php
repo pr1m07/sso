@@ -48,7 +48,7 @@ $('#users').dataTable({
 				<ol class="breadcrumb">
 				  <li>Cloud added on: <a class="text-info" href="#"><?=strftime('%d/%m/%Y', strtotime($cloud['date']))?></a></li>
           <li>Number of users: <a class="text-info" href="#"><!--?=$rcounter?--></a></li>
-          <a href="<?=$cloud['dashboard']?>" target="_blank" class="pull-right"><span class="glyphicon glyphicon-cloud"></span> Dashboard login</a>
+          <a href="<?=base_url()?>admin/auth/<?=$cloud['cID']?>/<?=$this->session->userdata('userID')?>" target="_blank" class="pull-right"><span class="glyphicon glyphicon-cloud"></span> Dashboard login</a>
 				</ol>
 
         <p class="pull-right"><img src="<?=base_url()?>assets/img/<?=$cloud['type']?>.png" width="100px"></p>
@@ -105,7 +105,6 @@ $('#users').dataTable({
       <td><?=$value['user_type']?></td>
       <td><?=$value['enabled']==1 ? 'yes' : 'no'; ?></td>
       <td>
-        <a href="<?=base_url()?>admin/edituser/<?=$value['cID']?>/<?=$value['ucID']?>"><button type="button" class="btn btn-warning btn-xs"><span class="glyphicon glyphicon-pencile"></span> edit</button></a>
         <button type="button" class="btn btn-info btn-xs" data-toggle="modal" data-target="#myModal_<?=$value['pID']?>"><span class="glyphicon glyphicon-bullhorn"></span> more info</button>
         <a href="<?=base_url()?>admin/deleteuser/<?=$value['cID']?>/<?=$value['ucID']?>"><button type="button" class="btn btn-danger btn-xs"><span class="glyphicon glyphicon-trash"></span> delete</button></a>
       </td>

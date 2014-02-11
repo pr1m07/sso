@@ -150,6 +150,29 @@ class Openstack
 		
 	}
 	
+	public function delete_server($cID,$rmvID){
+		$client = clone $this->client;
+		
+		try {
+			$credentials = $this->load_credentials_from_cache($cID);
+			$client->ImportCredentials($credentials);
+			
+			$compute = $client->computeService('nova','RegionOne');
+			
+			$server = $compute->server($rvmID);
+			$server->delete();
+		
+		} catch (\Guzzle\Http\Exception\BadResponseException $e) {
+			
+			$responseBody = (string) $e->getResponse()->getBody();
+			$statusCode   = $e->getResponse()->getStatusCode();
+			$headers      = $e->getResponse()->getHeaderLines();
+			
+			echo sprintf('Status: %s\nBody: %s\nHeaders: %s', $statusCode, $responseBody, implode(', ', $headers));
+		}
+		
+	}
+	
 	function store_credentials_in_cache($credentials,$ucID){
 	
 		try{

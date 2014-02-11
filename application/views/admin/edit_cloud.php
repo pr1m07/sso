@@ -64,10 +64,10 @@ function selectCheck(nameSelect){
         <div class="col-md-5 pull-right" style="display:none;" id="OpenStack">
           <p class="pull-right"><img src="<?=base_url()?>assets/img/<?=$cloud['type']?>.png" width="40px"></p>
           <p>Additional info for <span class="text-danger"><?=$cloud['type']?></span></p>
-          <p>Admin user:<input class="form-control" name="admin_user" type="text" value="<?=$cloud['admin_user']?>" /></p>
-          <p>Admin pass:<input class="form-control" name="admin_pass" type="text" value="<?=$cloud['admin_pass']?>" /></p>
-          <p>Admin token:<input class="form-control" name="admin_token" type="text" value="<?=$cloud['admin_token']?>" /></p>
-          <p>User tenant:<input class="form-control" name="user_tenant" type="text" value="<?=$cloud['user_tenant']?>" /></p>
+          <p>Admin user:<input class="form-control" name="admin_user_os" type="text" value="<?=$cloud['admin_user']?>" /></p>
+          <p>Admin pass:<input class="form-control" name="admin_pass_os" type="text" value="<?=$cloud['admin_pass']?>" /></p>
+          <p>Admin token:<input class="form-control" name="admin_token_os" type="text" value="<?=$cloud['admin_token']?>" /></p>
+          <p>User tenant:<input class="form-control" name="user_tenant_os" type="text" value="<?=$cloud['user_tenant']?>" /></p>
         </div>
         
         <div class="col-md-5 pull-right" style="display:none;" id="VMware">
